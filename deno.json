@@ -3,7 +3,8 @@
     "dev": "deno serve --allow-net --allow-env main.ts",
     "fmt": "deno fmt",
     "lint": "deno lint",
-    "test:auth": "deno run --allow-env --allow-net --allow-read scripts/test-bluesky-auth.ts"
+    "test:auth": "deno run --allow-env --allow-net --allow-read scripts/test-bluesky-auth.ts",
+    "install-hook": "deno run --allow-env --allow-run --allow-read --allow-write scripts/install-hook.ts"
   },
   "imports": {
     "@atproto/api": "npm:@atproto/api"

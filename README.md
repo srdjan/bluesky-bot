@@ -63,7 +63,19 @@ BLUESKY_DRYRUN=on deno run --allow-env --allow-net --allow-run --allow-read --al
 
 ## Git Hook Integration
 
-Add the script to `pre-push` (or any hook you prefer):
+Install the helper hook into your local repository (defaults to `.git/hooks/pre-push`):
+
+```bash
+deno task install-hook
+```
+
+The installer respects `git config core.hooksPath`, and you can override the destination when needed:
+
+- `deno task install-hook -- --hook=post-commit` installs a different hook name.
+- `GIT_HOOK_DIR=.githooks deno task install-hook` targets a custom hooks directory.
+- Append `-- --force` to overwrite an existing hook.
+
+For reference (or if you prefer to manage hooks manually), the generated script is:
 
 ```bash
 #!/usr/bin/env bash
@@ -76,8 +88,6 @@ if ! command -v deno >/dev/null 2>&1; then
 fi
 exec deno run --allow-env --allow-net --allow-run --allow-read --allow-write scripts/bluesky-post.ts
 ```
-
-Make the hook executable with `chmod +x .git/hooks/pre-push`.
 
 **What the hook does**
 
