@@ -4,7 +4,8 @@ This guide explains how to package and distribute the Bluesky bot to other repos
 
 ## What's Been Created
 
-The bot has been refactored into a **self-contained, portable package** under `.githooks/bluesky-bot/`:
+The bot has been refactored into a **self-contained, portable package** under
+`.githooks/bluesky-bot/`:
 
 ```
 .githooks/bluesky-bot/
@@ -16,6 +17,7 @@ The bot has been refactored into a **self-contained, portable package** under `.
 ```
 
 **Key Features:**
+
 - ✅ All dependencies inlined (no local imports)
 - ✅ Self-contained in single directory
 - ✅ Works from any repository
@@ -42,12 +44,14 @@ deno run --allow-env --allow-run --allow-read --allow-write .githooks/bluesky-bo
 ```
 
 **Pros:**
+
 - Code is version controlled in their repo
 - Easy to customize per project
 - No external dependencies at runtime
 - Transparent and auditable
 
 **Cons:**
+
 - Manual updates required
 - Each repo has its own copy
 
@@ -78,7 +82,8 @@ Users can install directly from a remote URL:
 deno run -A https://raw.githubusercontent.com/YOUR-USERNAME/deno-bsky-bot/main/.githooks/bluesky-bot/install.ts
 ```
 
-**Note:** This requires modifying `install.ts` to handle remote installation (downloading files first).
+**Note:** This requires modifying `install.ts` to handle remote installation (downloading files
+first).
 
 ### Method 4: Archive/Release Bundle
 
@@ -111,11 +116,13 @@ git submodule update --remote
 ```
 
 **Pros:**
+
 - Easy to keep updated
 - Shared across repos
 - Version pinning
 
 **Cons:**
+
 - More complex setup
 - Submodule learning curve
 
@@ -171,6 +178,7 @@ The root `deno.json` now includes these tasks:
 ```
 
 Users with these tasks can simply run:
+
 - `deno task bluesky:install` - Install the hook
 - `deno task bluesky:test` - Test without posting
 - `deno task bluesky:post` - Post manually
@@ -192,6 +200,7 @@ deno publish
 ```
 
 Users could then:
+
 ```bash
 deno install -A jsr:@yourname/bluesky-bot/install
 ```
@@ -223,8 +232,7 @@ Here's what you could include in your main README:
    deno run --allow-env --allow-run --allow-read --allow-write .githooks/bluesky-bot/install.ts
    ```
 
-3. **Configure your credentials:**
-   Edit `.env` and add:
+3. **Configure your credentials:** Edit `.env` and add:
    ```
    BSKY_HANDLE=yourname.bsky.social
    BSKY_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
@@ -305,10 +313,9 @@ BLUESKY_DRYRUN=on deno run -A .githooks/bluesky-bot/mod.ts
 
 ## Summary
 
-✅ **Package is ready for distribution**
-✅ **Self-contained and portable**
-✅ **Multiple distribution methods available**
-✅ **Smart installer handles setup**
-✅ **Complete documentation included**
+✅ **Package is ready for distribution** ✅ **Self-contained and portable** ✅ **Multiple
+distribution methods available** ✅ **Smart installer handles setup** ✅ **Complete documentation
+included**
 
-The `.githooks/bluesky-bot/` folder is now a standalone, distributable package that can be easily added to any Git repository!
+The `.githooks/bluesky-bot/` folder is now a standalone, distributable package that can be easily
+added to any Git repository!

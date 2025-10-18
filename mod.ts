@@ -386,15 +386,7 @@ async function publishPost(
   text: string,
 ): Promise<Result<void, BlueskyError>> {
   if (config.dryRun) {
-    console.log(`[dryrun] would post:`);
-    console.log(text);
-
-    // Show what RichText would detect
-    const agent = new BskyAgent({ service: config.service });
-    const richText = new RichText({ text });
-    await richText.detectFacets(agent);
-    console.log(`[dryrun] detected ${richText.facets?.length ?? 0} facets:`, richText.facets);
-
+    console.log(`[dryrun] would post: ${text}`);
     return ok(undefined);
   }
 
@@ -414,8 +406,6 @@ async function publishPost(
     // Use RichText to detect and create facets for URLs, mentions, etc.
     const richText = new RichText({ text });
     await richText.detectFacets(agent);
-
-    console.log(`[bsky] posting with ${richText.facets?.length ?? 0} facets`);
 
     const result = await agent.post({
       text: richText.text,
