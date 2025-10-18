@@ -150,6 +150,51 @@ curl http://localhost:8000/health
 
 ---
 
+## Local Git Hook (Bluesky, no GitHub webhook)
+
+If you prefer posting to Bluesky from your local machine without using a GitHub webhook, use the
+provided CLI script and a local git hook.
+
+1. Configure environment (e.g., in your shell profile or a local .env you source)
+
+```bash
+export BSKY_IDENTIFIER="yourname.bsky.social"   # or DID
+env | grep -q BSKY_APP_PASSWORD || export BSKY_APP_PASSWORD="xxxx-xxxx-xxxx-xxxx"
+# Optional
+export BLUESKY_SERVICE="https://bsky.social"
+export BLUESKY_DRYRUN=off
+```
+
+2. Install a pre-push hook that calls the script
+
+Create .git/hooks/pre-push and make it executable (chmod +x .git/hooks/pre-push):
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+if ! command -v deno >/dev/null 2>&1; then
+  echo "deno not found; skipping Bluesky post" >&2
+  exit 0
+fi
+# The script handles @publish + semver gating and dedupe
+# Requires: --allow-env --allow-net --allow-run --allow-read --allow-write
+exec deno run --allow-env --allow-net --allow-run --allow-read --allow-write scripts/bluesky-post.ts
+```
+
+3. Behavior
+
+- Runs on git push from your local machine
+- Posts only when the latest commit message contains @publish and a semantic version
+- Stores seen SHAs in .git/aug-bluesky-posted to avoid duplicates locally
+- Best-effort: if remote is GitHub, the post includes a commit URL
+
+> Note: Git hooks run locally and are not shared; consider committing a template under .githooks/
+> and instruct contributors to enable core.hooksPath.
+
+---
+
 ## Configuration & Behavior
 
 - **Exactly-once**: KV key `["posted", "<owner>/<repo>", "<sha>"]` is written after success. You can
