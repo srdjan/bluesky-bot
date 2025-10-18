@@ -407,6 +407,9 @@ async function publishPost(
     const richText = new RichText({ text });
     await richText.detectFacets(agent);
 
+    console.log(`[debug] Text: ${richText.text}`);
+    console.log(`[debug] Facets: ${JSON.stringify(richText.facets, null, 2)}`);
+
     const result = await agent.post({
       text: richText.text,
       facets: richText.facets,

@@ -1,10 +1,17 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@srdjan/bluesky-bot@*": "1.1.0",
     "jsr:@std/path@1.0.8": "1.0.8",
     "npm:@atproto/api@~0.13.14": "0.13.35"
   },
   "jsr": {
+    "@srdjan/bluesky-bot@1.1.0": {
+      "integrity": "8807641c4ac16adfbc4d42605c8b1060d32ba9450e32b86b68c75090fa02ce05",
+      "dependencies": [
+        "npm:@atproto/api"
+      ]
+    },
     "@std/path@1.0.8": {
       "integrity": "548fa456bb6a04d3c1a1e7477986b6cffbce95102d0bb447c67c4ee70e0364be"
     }
