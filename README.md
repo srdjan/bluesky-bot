@@ -1,18 +1,21 @@
-# GitHub → Twitter Bot (Deno Deploy + Deno KV)
+# GitHub → Bluesky Bot (Deno Deploy + Deno KV)
 
-A tiny webhook service that listens to **GitHub push events** and posts to **X/Twitter** **once per commit** — but **only** when the head commit message contains `@publish` **and** a **semantic version** (e.g. `v1.2.3`, `1.2.3`, or `2.0.0-beta.1`). Uses **Deno KV** for deduplication and verifies webhook signatures for security.
+A tiny webhook service that listens to **GitHub push events** and posts to **Bluesky** **once per
+commit** — whenever the head commit message contains a **semantic version** (e.g. `v1.2.3`, `1.2.3`,
+or `2.0.0-beta.1`). Add `@publish` if you like an explicit marker, but it’s no longer required. Uses
+**Deno KV** for deduplication and verifies webhook signatures for security.
 
-> Single file, no deps. Deploy in minutes via **Deno Deploy**.
+> Single file with the `@atproto/api` SDK. Deploy in minutes via **Deno Deploy**.
 
 ---
 
 ## Features
 
 - ✅ Post only for **just-pushed head commit**
-- ✅ Require **`@publish`** in the commit message
-- ✅ **Exactly-once** per commit via **Deno KV** (`["tweeted", "<owner>/<repo>", "<sha>"]`)
+- ✅ Require a **semantic version** in the commit message (`@publish` is optional)
+- ✅ **Exactly-once** per commit via **Deno KV** (`["posted", "<owner>/<repo>", "<sha>"]`)
 - ✅ **HMAC-SHA256** GitHub signature verification
-- ✅ Optional **LLM condensation** (OpenAI) for short, clear tweets
+- ✅ Optional **LLM condensation** (OpenAI) for short, clear Bluesky posts
 - ✅ Health endpoint `/health`
 
 ---
@@ -20,16 +23,16 @@ A tiny webhook service that listens to **GitHub push events** and posts to **X/T
 ## Architecture
 
 ```
-GitHub (push) ──> Deno Deploy /webhook ──> KV dedupe ──> X/Twitter API
+GitHub (push) ──> Deno Deploy /webhook ──> KV dedupe ──> Bluesky API
                          │
                          └─> /health (GET)
 ```
 
 - **Entry**: `POST /webhook`
 - **Security**: Verify `X-Hub-Signature-256` using `GITHUB_WEBHOOK_SECRET`
-- **Gate**: Process **head commit** only, require `@publish`
-- **Dedup**: KV record written after successful tweet
-- **Tweet**: OAuth 1.0a user-context post to `statuses/update.json`
+- **Gate**: Process **head commit** only, require a semantic version string
+- **Dedup**: KV record written after successful post
+- **Post**: Bluesky AT Protocol via `@atproto/api` with app password auth
 
 ---
 
@@ -40,17 +43,16 @@ GitHub (push) ──> Deno Deploy /webhook ──> KV dedupe ──> X/Twitter A
 1. Create a new Deno Deploy project and upload `main.ts` from this repo.
 2. Add **Environment Variables**:
 
-| Name | Required | Description |
-|---|:---:|---|
-| `GITHUB_WEBHOOK_SECRET` | ✅ | Shared secret used to verify webhook signatures |
-| `X_API_KEY` | ✅ | X/Twitter API key |
-| `X_API_SECRET` | ✅ | X/Twitter API key secret |
-| `X_ACCESS_TOKEN` | ✅ | X access token (user context, write perms) |
-| `X_ACCESS_TOKEN_SECRET` | ✅ | X access token secret |
-| `OPENAI_API_KEY` |  | Enables AI summarization of commit title |
-| `AI_SUMMARY` |  | `"on"` (default) or `"off"` |
-| `BRANCH_ONLY` |  | Optional branch name to restrict posting (e.g. `main`) |
-| `REPO_ALLOWLIST` |  | Comma-separated allowlist: `owner/repo`, `owner/*`, `*/repo`, or `*` |
+| Name                    | Required | Description                                                                                 |
+| ----------------------- | :------: | ------------------------------------------------------------------------------------------- |
+| `GITHUB_WEBHOOK_SECRET` |    ✅    | Shared secret used to verify webhook signatures                                             |
+| `BLUESKY_IDENTIFIER`    |    ✅    | Your Bluesky handle or DID                                                                  |
+| `BLUESKY_APP_PASSWORD`  |    ✅    | Bluesky [app password](https://account.bsky.app/settings/app-passwords) with posting rights |
+| `BLUESKY_SERVICE`       |          | Bluesky service URL (default `https://bsky.social`)                                         |
+| `OPENAI_API_KEY`        |          | Enables AI summarization of commit title                                                    |
+| `AI_SUMMARY`            |          | `"on"` (default) or `"off"`                                                                 |
+| `BRANCH_ONLY`           |          | Optional branch name to restrict posting (e.g. `main`)                                      |
+| `REPO_ALLOWLIST`        |          | Comma-separated allowlist: `owner/repo`, `owner/*`, `*/repo`, or `*`                        |
 
 > KV is available automatically on Deno Deploy—no extra binding required.
 
@@ -59,7 +61,7 @@ GitHub (push) ──> Deno Deploy /webhook ──> KV dedupe ──> X/Twitter A
 - **Payload URL**: `https://<your-deno-deploy-domain>/webhook`
 - **Content type**: `application/json`
 - **Secret**: the same `GITHUB_WEBHOOK_SECRET`
-- **Events**: *Just the push event*
+- **Events**: _Just the push event_
 
 > By default, **only pushes to the repository's `default_branch`** are considered.
 >
@@ -69,44 +71,50 @@ GitHub (push) ──> Deno Deploy /webhook ──> KV dedupe ──> X/Twitter A
 
 ## Usage
 
-Add `@publish` **and a semantic version** to the head commit message of your push:
+Add a **semantic version** to the head commit message of your push (`@publish` is optional):
 
 ```
-feat: introduce streaming CSV export v1.2.3 @publish
+feat: introduce streaming CSV export v1.2.3
 
 - Adds /export/csv
 - Streams rows in chunks
 ```
 
-A tweet like this will be posted:
+Want the old behaviour? Just include `@publish` alongside the version:
+
+```
+feat: introduce streaming CSV export v1.2.3 @publish
+```
+
+A Bluesky post like this will be created:
 
 ```
 introduce streaming CSV export — owner/repo by Alice (3f2a1b9) https://github.com/owner/repo/commit/3f2a1b9… #gh_3f2a1b9
 ```
 
 - The `#gh_<sha7>` tag helps with traceability and manual audit.
-- If the same SHA arrives again, KV prevents a duplicate tweet.
+- If the same SHA arrives again, KV prevents a duplicate post.
 
 ---
 
-
 ### Per-repo allowlist
 
-Set `REPO_ALLOWLIST` to restrict which repositories can trigger tweets.
+Set `REPO_ALLOWLIST` to restrict which repositories can trigger posts.
 
 **Supported patterns**:
+
 - Exact repo: `owner/repo`
 - All repos for an owner: `owner/*`
 - All owners for a repo name: `*/repo`
 - Everything: `*`
 
 **Examples**:
+
 ```
 REPO_ALLOWLIST="myorg/app1,myorg/*"
 REPO_ALLOWLIST="*/docs,*"
 REPO_ALLOWLIST=""      # (empty) → allow all repos
 ```
-
 
 ## Local Development
 
@@ -115,10 +123,9 @@ You can run this locally for manual testing:
 ```bash
 # Set env (example)
 export GITHUB_WEBHOOK_SECRET=devsecret
-export X_API_KEY=key
-export X_API_SECRET=secret
-export X_ACCESS_TOKEN=token
-export X_ACCESS_TOKEN_SECRET=tokensecret
+export BLUESKY_IDENTIFIER=example.bsky.social
+export BLUESKY_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
+export BLUESKY_SERVICE=https://bsky.social
 export AI_SUMMARY=off
 
 # Start server (uses Deno KV locally)
@@ -145,39 +152,41 @@ curl http://localhost:8000/health
 
 ## Configuration & Behavior
 
-- **Exactly-once**: KV key `["tweeted", "<owner>/<repo>", "<sha>"]` is written after success. You can add TTL:
+- **Exactly-once**: KV key `["posted", "<owner>/<repo>", "<sha>"]` is written after success. You can
+  add TTL:
   ```ts
   await kv.set(key, rec, { expireIn: 1000 * 60 * 60 * 24 * 365 * 2 });
   ```
 
 - **Branch filtering**: Set `BRANCH_ONLY` to restrict posting to that branch.
 
-- **AI condensation**: Toggle with `AI_SUMMARY=on|off`. Uses `gpt-4o-mini` for a terse, specific first line.
+- **AI condensation**: Toggle with `AI_SUMMARY=on|off`. Uses `gpt-4o-mini` for a terse, specific
+  first line.
 
-- **Tweet composition**:
+- **Post composition**:
   - compressed first line
   - `— <owner/repo> by <author> (<sha7>) <commit-url> #gh_<sha7>`
-  - truncated to 280 characters
+  - truncated to 300 characters (Bluesky post limit)
 
 ---
 
 ## Security Notes
 
 - **Webhook signature** is required; requests without a valid `X-Hub-Signature-256` are **401**.
-- Keep your **Twitter credentials** write-scoped and rotate if compromised.
-- Consider setting `BRANCH_ONLY` (e.g. `main`) to prevent unintended tweets from topic branches.
-- Limit who can push to the tweeting branch.
+- Keep your **Bluesky credentials** write-scoped and rotate if compromised.
+- Consider setting `BRANCH_ONLY` (e.g. `main`) to prevent unintended posts from topic branches.
+- Limit who can push to the posting branch.
 
 ---
 
 ## Extending
 
-| Need | How |
-|---|---|
-| Tweet for every `@publish` commit in a push | Iterate `payload.commits` and run the same KV-guarded post for each |
-| Include PR number/title | Resolve PR via GitHub API when message suggests a merge/squash |
-| Multi-network syndication | Add Mastodon/Bluesky adapters (token-only flows) |
-| Structured logs | Write tweet attempts/outcomes to KV or external sink |
+| Need                                             | How                                                                 |
+| ------------------------------------------------ | ------------------------------------------------------------------- |
+| Post for every semantic-version commit in a push | Iterate `payload.commits` and run the same KV-guarded post for each |
+| Include PR number/title                          | Resolve PR via GitHub API when message suggests a merge/squash      |
+| Multi-network syndication                        | Add Mastodon/other adapters (token-only flows)                      |
+| Structured logs                                  | Write post attempts/outcomes to KV or external sink                 |
 
 ---
 

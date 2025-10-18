@@ -4,6 +4,9 @@
     "fmt": "deno fmt",
     "lint": "deno lint"
   },
+  "imports": {
+    "@atproto/api": "npm:@atproto/api"
+  },
   "fmt": {
     "useTabs": false,
     "lineWidth": 100,
