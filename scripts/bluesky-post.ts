@@ -14,8 +14,46 @@
 // Notes:
 // - Minimal dedupe via .git/aug-bluesky-posted file to avoid reposting the same SHA locally.
 
+// Load .env if present so local testing picks up secrets
+function loadDotenv(file: string = ".env"): void {
+  try {
+    const txt = Deno.readTextFileSync(file);
+    for (const rawLine of txt.split("\n")) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) continue;
+      const eq = line.indexOf("=");
+      if (eq <= 0) continue;
+      let key = line.slice(0, eq).trim();
+      let val = line.slice(eq + 1).trim();
+      if (key.toLowerCase().startsWith("export ")) key = key.slice(7).trim();
+      if (
+        (val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))
+      ) {
+        val = val.slice(1, -1);
+      }
+      if (Deno.env.get(key) == null) {
+        try {
+          Deno.env.set(key, val);
+        } catch { /* ignore if no permission */ }
+      }
+    }
+  } catch { /* ignore missing .env */ }
+}
+
+loadDotenv();
+
 // Service base (can be overridden via env)
 const BLUESKY_SERVICE = Deno.env.get("BLUESKY_SERVICE") ?? "https://bsky.social";
+
+// Optional AI summarization
+const AI_SUMMARY = (Deno.env.get("AI_SUMMARY") ?? "on").toLowerCase();
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
+
+function stripCommitHashes(input: string): string {
+  // remove likely git SHAs (7 to 40 hex chars)
+  const noShas = input.replace(/\b[0-9a-f]{7,40}\b/gi, "");
+  return noShas.replace(/\s{2,}/g, " ").trim();
+}
 
 // --------------- Helpers ---------------
 const hasPublishKeyword = (msg: string) => /\B@publish\b/i.test(msg);
@@ -70,6 +108,42 @@ async function hasSeenSha(sha: string): Promise<boolean> {
   }
 }
 
+// --------------- Optional AI condense ---------------
+async function aiCondense(text: string): Promise<string> {
+  if (!OPENAI_API_KEY || AI_SUMMARY === "off") return text;
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a concise release/commit summarizer. Write in first-person, author’s commentary voice. Be specific and human. Exclude git commit hashes/SHAs. Keep semantic version identifiers if present. No hashtags or quotes.",
+          },
+          {
+            role: "user",
+            content:
+              `Summarize as a short first-person commentary (~20 words). Do not include any git hashes/SHAs. Keep semver if present:\n"${text}"`,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 80,
+      }),
+    });
+    if (!res.ok) {
+      console.warn("AI summary failed:", await res.text());
+      return text;
+    }
+    const data = await res.json();
+    return (data.choices?.[0]?.message?.content ?? text).trim();
+  } catch (_) {
+    return text;
+  }
+}
+
 async function markSeenSha(sha: string): Promise<void> {
   try {
     await Deno.writeTextFile(".git/aug-bluesky-posted", `${sha}\n`, { append: true });
@@ -113,13 +187,17 @@ async function bskyPost(accessJwt: string, did: string, text: string) {
 // --------------- Main ---------------
 if (import.meta.main) {
   const env = Deno.env.toObject();
-  const BSKY_HANDLE = env.BSKY_HANDLE || env.BSKY_IDENTIFIER || "";
-  const BSKY_APP_PASSWORD = env.BSKY_APP_PASSWORD || "";
+  const BSKY_HANDLE = env.BSKY_HANDLE || env.BSKY_IDENTIFIER || env.BLUESKY_HANDLE ||
+    env.BLUESKY_IDENTIFIER || "";
+  const BSKY_APP_PASSWORD = env.BSKY_APP_PASSWORD || env.BLUESKY_APP_PASSWORD || "";
   const BLUESKY_DRYRUN = env.BLUESKY_DRYRUN || "";
   if (!BSKY_HANDLE || !BSKY_APP_PASSWORD) {
-    console.error("Missing BSKY_HANDLE/BSKY_IDENTIFIER or BSKY_APP_PASSWORD env.");
+    console.error(
+      "Missing BSKY_HANDLE/BSKY_IDENTIFIER (or BLUESKY_*) and BSKY_APP_PASSWORD (or BLUESKY_APP_PASSWORD) env.",
+    );
     Deno.exit(1);
   }
+  console.log(`[bluesky] service=${BLUESKY_SERVICE} identifier=${BSKY_HANDLE}`);
 
   const { sha, message, author, branch: _branch, repo, commitUrl } = await latestCommitInfo();
 
@@ -136,12 +214,29 @@ if (import.meta.main) {
   }
 
   const firstLine = message.split("\n")[0].trim();
-  const tag = `#gh_${shortSha(sha)}`;
-  const byline = repo ? `${repo} by ${author}` : author;
-  const suffix = [commitUrl, tag].filter(Boolean).join(" ");
-  const text = [firstLine, `— ${byline} (${shortSha(sha)})`, suffix]
-    .filter(Boolean)
-    .join(" ");
+  const sanitized = stripCommitHashes(firstLine);
+  const condensed = await aiCondense(sanitized);
+  const repoUrl = repo ? `https://github.com/${repo}` : "";
+  const text = (repoUrl ? `${condensed}\n${repoUrl}` : condensed).trim();
+  // Save payload for testing/audit
+  try {
+    await Deno.mkdir("payloads", { recursive: true });
+    const payloadRecord = {
+      source: "local-git-hook",
+      dryrun: BLUESKY_DRYRUN.toLowerCase() === "on",
+      sha,
+      author,
+      repo,
+      commitUrl,
+      text,
+      createdAt: new Date().toISOString(),
+    };
+    const filePath = `payloads/bluesky.${sha}.json`;
+    await Deno.writeTextFile(filePath, JSON.stringify(payloadRecord, null, 2));
+    console.log(`[payload] wrote ${filePath}`);
+  } catch (e) {
+    console.warn("Failed to write payload file:", e);
+  }
 
   if (BLUESKY_DRYRUN.toLowerCase() === "on") {
     console.log(`[dryrun] would post: ${text}`);
