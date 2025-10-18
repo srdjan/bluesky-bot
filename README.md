@@ -23,7 +23,7 @@ If the script is run with `BLUESKY_DRYRUN=on`, it prints the post instead of pub
 
 ## Requirements
 
-- [Deno](https://deno.land/) 1.41+ (for npm interop).
+- [Deno](https://deno.land/) 2.5+ (for npm interop).
 - A Bluesky handle (or DID) and an [app password](https://account.bsky.app/settings/app-passwords).
 - Optional: OpenAI API key for AI-powered summaries.
 

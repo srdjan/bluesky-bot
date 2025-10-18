@@ -4,7 +4,10 @@
     "fmt": "deno fmt",
     "lint": "deno lint",
     "test:auth": "deno run --allow-env --allow-net --allow-read scripts/test-bluesky-auth.ts",
-    "install-hook": "deno run --allow-env --allow-run --allow-read --allow-write scripts/install-hook.ts"
+    "install-hook": "deno run --allow-env --allow-run --allow-read --allow-write scripts/install-hook.ts",
+    "bluesky:install": "deno run --allow-env --allow-run --allow-read --allow-write .githooks/bluesky-bot/install.ts",
+    "bluesky:post": "deno run --allow-env --allow-net --allow-run --allow-read --allow-write .githooks/bluesky-bot/mod.ts",
+    "bluesky:test": "BLUESKY_DRYRUN=on deno run --allow-env --allow-net --allow-run --allow-read --allow-write .githooks/bluesky-bot/mod.ts"
   },
   "imports": {
     "@atproto/api": "npm:@atproto/api"
