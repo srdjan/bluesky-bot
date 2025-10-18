@@ -213,6 +213,10 @@ BLUESKY_DRYRUN=on deno task post
 
 ---
 
+Built with ❤️ using modern web standards and the power of Deno + mono-jsx
+
+---
+
 ## License
 
 MIT
