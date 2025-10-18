@@ -123,9 +123,9 @@ if (import.meta.main) {
 
   const { sha, message, author, branch: _branch, repo, commitUrl } = await latestCommitInfo();
 
-  // Gate 1: @publish + semver
-  if (!hasPublishKeyword(message) || !hasSemver(message)) {
-    console.log(`[skip] ${shortSha(sha)} — missing @publish or semver`);
+  // Gate 1: @publish OR semver
+  if (!hasPublishKeyword(message) && !hasSemver(message)) {
+    console.log(`[skip] ${shortSha(sha)} — missing both @publish and semver`);
     Deno.exit(0);
   }
 

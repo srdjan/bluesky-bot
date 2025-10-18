@@ -186,7 +186,7 @@ exec deno run --allow-env --allow-net --allow-run --allow-read --allow-write scr
 3. Behavior
 
 - Runs on git push from your local machine
-- Posts only when the latest commit message contains @publish and a semantic version
+- Posts when the latest commit message contains @publish OR a semantic version (e.g., v1.2.3)
 - Stores seen SHAs in .git/aug-bluesky-posted to avoid duplicates locally
 - Best-effort: if remote is GitHub, the post includes a commit URL
 
