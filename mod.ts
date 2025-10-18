@@ -41,7 +41,7 @@
  * ```
  */
 
-import { BskyAgent } from "@atproto/api";
+import { BskyAgent, RichText } from "@atproto/api";
 
 // =============== Constants ===============
 
@@ -402,7 +402,16 @@ async function publishPost(
 
   try {
     const agent = agentResult.value;
-    const result = await agent.post({ text });
+
+    // Use RichText to detect and create facets for URLs, mentions, etc.
+    const richText = new RichText({ text });
+    await richText.detectFacets(agent);
+
+    const result = await agent.post({
+      text: richText.text,
+      facets: richText.facets,
+    });
+
     await markSeenSha(commit.sha);
     console.log(`[bsky] posted ${shortSha(commit.sha)} —`, result?.uri ?? "ok");
     return ok(undefined);
