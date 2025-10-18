@@ -415,6 +415,8 @@ async function publishPost(
     const richText = new RichText({ text });
     await richText.detectFacets(agent);
 
+    console.log(`[bsky] posting with ${richText.facets?.length ?? 0} facets`);
+
     const result = await agent.post({
       text: richText.text,
       facets: richText.facets,

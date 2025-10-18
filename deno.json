@@ -1,6 +1,6 @@
 {
   "name": "@srdjan/bluesky-bot",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "exports": {
     ".": "./mod.ts",
     "./install": "./install.ts"
