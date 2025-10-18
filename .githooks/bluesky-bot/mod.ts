@@ -17,6 +17,34 @@
 
 import { BskyAgent } from "@atproto/api";
 
+// =============== Constants ===============
+
+const DEDUPE_FILE_PATH = ".git/aug-bluesky-posted" as const;
+const DEFAULT_BLUESKY_SERVICE = "https://bsky.social" as const;
+const OPENAI_MODEL = "gpt-4o-mini" as const;
+const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions" as const;
+const SEMVER_REGEX =
+  /\b(?:v|V)?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\b/;
+const PUBLISH_KEYWORD_REGEX = /\B@publish\b/i;
+
+// =============== Types ===============
+
+type Config = {
+  readonly service: string;
+  readonly handle: string;
+  readonly password: string;
+  readonly dryRun: boolean;
+};
+
+type CommitInfo = {
+  readonly sha: string;
+  readonly message: string;
+  readonly author: string;
+  readonly branch: string;
+  readonly repo: string;
+  readonly commitUrl: string;
+};
+
 // =============== Inlined Environment Utilities ===============
 
 function loadDotenv(file: string = ".env"): void {
@@ -63,11 +91,6 @@ function firstEnv(
 
 // =============== Configuration ===============
 
-loadDotenv();
-const envSnapshot = Deno.env.toObject();
-const DEFAULT_BLUESKY_SERVICE = "https://bsky.social";
-const AI_SUMMARY = firstEnv(envSnapshot, ["AI_SUMMARY"], "on").toLowerCase();
-const OPENAI_API_KEY = firstEnv(envSnapshot, ["OPENAI_API_KEY"], "");
 const textDecoder = new TextDecoder();
 
 // =============== Utility Functions ===============
@@ -78,11 +101,9 @@ function stripCommitHashes(input: string): string {
   return noShas.replace(/\s{2,}/g, " ").trim();
 }
 
-const hasPublishKeyword = (msg: string) => /\B@publish\b/i.test(msg);
-const hasSemver = (msg: string) =>
-  /\b(?:v|V)?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\b/
-    .test(msg);
-const shortSha = (sha: string) => sha.slice(0, 7);
+const hasPublishKeyword = (msg: string): boolean => PUBLISH_KEYWORD_REGEX.test(msg);
+const hasSemver = (msg: string): boolean => SEMVER_REGEX.test(msg);
+const shortSha = (sha: string): string => sha.slice(0, 7);
 
 async function runGit(args: string[]): Promise<string> {
   const { success, stdout, stderr } = await new Deno.Command("git", {
@@ -99,7 +120,7 @@ async function runGit(args: string[]): Promise<string> {
   return textDecoder.decode(stdout).trim();
 }
 
-async function latestCommitInfo() {
+async function latestCommitInfo(): Promise<CommitInfo> {
   const sha = await runGit(["rev-parse", "HEAD"]);
   const message = await runGit(["log", "-1", "--pretty=%B"]);
   const author = await runGit(["log", "-1", "--pretty=%an"]);
@@ -127,7 +148,7 @@ async function latestCommitInfo() {
 
 async function hasSeenSha(sha: string): Promise<boolean> {
   try {
-    const data = await Deno.readTextFile(".git/aug-bluesky-posted");
+    const data = await Deno.readTextFile(DEDUPE_FILE_PATH);
     return data.split("\n").some((l) => l.trim() === sha);
   } catch (_) {
     return false;
@@ -136,7 +157,7 @@ async function hasSeenSha(sha: string): Promise<boolean> {
 
 async function markSeenSha(sha: string): Promise<void> {
   try {
-    await Deno.writeTextFile(".git/aug-bluesky-posted", `${sha}\n`, {
+    await Deno.writeTextFile(DEDUPE_FILE_PATH, `${sha}\n`, {
       append: true,
     });
   } catch (_) {
@@ -147,16 +168,20 @@ async function markSeenSha(sha: string): Promise<void> {
 // =============== Optional AI Condense ===============
 
 async function aiCondense(text: string): Promise<string> {
-  if (!OPENAI_API_KEY || AI_SUMMARY === "off") return text;
+  const env = Deno.env.toObject();
+  const aiSummary = firstEnv(env, ["AI_SUMMARY"], "on").toLowerCase();
+  const openaiApiKey = firstEnv(env, ["OPENAI_API_KEY"], "");
+
+  if (!openaiApiKey || aiSummary === "off") return text;
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    const res = await fetch(OPENAI_API_URL, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        "Authorization": `Bearer ${openaiApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: OPENAI_MODEL,
         messages: [
           {
             role: "system",
@@ -190,71 +215,106 @@ async function createAgent(
   service: string,
   identifier: string,
   password: string,
-) {
+): Promise<BskyAgent> {
   const agent = new BskyAgent({ service });
   await agent.login({ identifier, password });
   return agent;
 }
 
-// =============== Main Entry Point ===============
+// =============== Main Workflow Functions ===============
 
-if (import.meta.main) {
-  const env = Deno.env.toObject();
+function loadConfig(env: Record<string, string>): Config {
   const service = firstEnv(env, ["BLUESKY_SERVICE"], DEFAULT_BLUESKY_SERVICE);
-  const BSKY_HANDLE = firstEnv(env, [
+  const handle = firstEnv(env, [
     "BSKY_HANDLE",
     "BSKY_IDENTIFIER",
     "BLUESKY_HANDLE",
     "BLUESKY_IDENTIFIER",
   ]);
-  const BSKY_APP_PASSWORD = firstEnv(env, [
+  const password = firstEnv(env, [
     "BSKY_APP_PASSWORD",
     "BLUESKY_APP_PASSWORD",
   ]);
-  const BLUESKY_DRYRUN = firstEnv(env, ["BLUESKY_DRYRUN"]);
+  const dryRun = firstEnv(env, ["BLUESKY_DRYRUN"]).toLowerCase() === "on";
 
-  if (!BSKY_HANDLE || !BSKY_APP_PASSWORD) {
-    console.error(
+  if (!handle || !password) {
+    throw new Error(
       "Missing BSKY_HANDLE/BSKY_IDENTIFIER (or BLUESKY_*) and BSKY_APP_PASSWORD (or BLUESKY_APP_PASSWORD) env.",
     );
-    Deno.exit(1);
   }
 
-  console.log(`[bluesky] service=${service} identifier=${BSKY_HANDLE}`);
+  return { service, handle, password, dryRun };
+}
 
-  const { sha, message, author, branch: _branch, repo, commitUrl } =
-    await latestCommitInfo();
-
+async function shouldPost(commit: CommitInfo): Promise<boolean> {
   // Gate 1: @publish OR semver
-  if (!hasPublishKeyword(message) && !hasSemver(message)) {
-    console.log(`[skip] ${shortSha(sha)} — missing both @publish and semver`);
-    Deno.exit(0);
+  if (!hasPublishKeyword(commit.message) && !hasSemver(commit.message)) {
+    console.log(
+      `[skip] ${shortSha(commit.sha)} — missing both @publish and semver`,
+    );
+    return false;
   }
 
   // Gate 2: dedupe
-  if (await hasSeenSha(sha)) {
-    console.log(`[skip] ${shortSha(sha)} — already posted locally`);
-    Deno.exit(0);
+  if (await hasSeenSha(commit.sha)) {
+    console.log(`[skip] ${shortSha(commit.sha)} — already posted locally`);
+    return false;
   }
 
-  const firstLine = message.split("\n")[0].trim();
+  return true;
+}
+
+async function composePost(commit: CommitInfo): Promise<string> {
+  const firstLine = commit.message.split("\n")[0].trim();
   const sanitized = stripCommitHashes(firstLine);
   const condensed = await aiCondense(sanitized);
-  const repoUrl = repo ? `https://github.com/${repo}` : "";
-  const text = (repoUrl ? `${condensed}\n${repoUrl}` : condensed).trim();
+  const repoUrl = commit.repo ? `https://github.com/${commit.repo}` : "";
+  return (repoUrl ? `${condensed}\n${repoUrl}` : condensed).trim();
+}
 
-  if (BLUESKY_DRYRUN.toLowerCase() === "on") {
+async function publishPost(
+  config: Config,
+  commit: CommitInfo,
+  text: string,
+): Promise<void> {
+  if (config.dryRun) {
     console.log(`[dryrun] would post: ${text}`);
-    Deno.exit(0);
+    return;
   }
 
+  const agent = await createAgent(config.service, config.handle, config.password);
+  const result = await agent.post({ text });
+  await markSeenSha(commit.sha);
+  console.log(`[bsky] posted ${shortSha(commit.sha)} —`, result?.uri ?? "ok");
+}
+
+// =============== Main Entry Point ===============
+
+async function run(): Promise<number> {
   try {
-    const agent = await createAgent(service, BSKY_HANDLE, BSKY_APP_PASSWORD);
-    const result = await agent.post({ text });
-    await markSeenSha(sha);
-    console.log(`[bsky] posted ${shortSha(sha)} —`, result?.uri ?? "ok");
+    loadDotenv();
+    const env = Deno.env.toObject();
+    const config = loadConfig(env);
+
+    console.log(`[bluesky] service=${config.service} identifier=${config.handle}`);
+
+    const commit = await latestCommitInfo();
+
+    if (!(await shouldPost(commit))) {
+      return 0;
+    }
+
+    const text = await composePost(commit);
+    await publishPost(config, commit, text);
+
+    return 0;
   } catch (err) {
     console.error("Bluesky post failed:", err);
-    Deno.exit(1);
+    return 1;
   }
+}
+
+if (import.meta.main) {
+  const exitCode = await run();
+  Deno.exit(exitCode);
 }
