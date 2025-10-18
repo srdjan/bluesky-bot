@@ -285,16 +285,16 @@ async function aiCondense(text: string): Promise<string> {
           {
             role: "system",
             content:
-              "You are a concise release/commit summarizer. Write in first-person, author's commentary voice. Be specific and human. Exclude git commit hashes/SHAs. Keep semantic version identifiers if present. No hashtags or quotes.",
+              "You are a concise release/commit summarizer for social media. Write in first-person, author's commentary voice. Be specific and human. Exclude git commit hashes/SHAs. Keep semantic version identifiers if present. Add 2-4 relevant hashtags at the end based on the content (e.g., #TypeScript #Deno #OpenSource #WebDev #Release). No quotes.",
           },
           {
             role: "user",
             content:
-              `Summarize as a short first-person commentary (~20 words). Do not include any git hashes/SHAs. Keep semver if present:\n"${text}"`,
+              `Summarize as a short first-person commentary (~20 words), then add 2-4 relevant hashtags. Do not include any git hashes/SHAs. Keep semver if present:\n"${text}"`,
           },
         ],
         temperature: 0.3,
-        max_tokens: 80,
+        max_tokens: 100,
       }),
     });
     if (!res.ok) {
@@ -386,7 +386,15 @@ async function publishPost(
   text: string,
 ): Promise<Result<void, BlueskyError>> {
   if (config.dryRun) {
-    console.log(`[dryrun] would post: ${text}`);
+    console.log(`[dryrun] would post:`);
+    console.log(text);
+
+    // Show what RichText would detect
+    const agent = new BskyAgent({ service: config.service });
+    const richText = new RichText({ text });
+    await richText.detectFacets(agent);
+    console.log(`[dryrun] detected ${richText.facets?.length ?? 0} facets:`, richText.facets);
+
     return ok(undefined);
   }
 
