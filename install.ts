@@ -1,11 +1,27 @@
 #!/usr/bin/env -S deno run --allow-env --allow-run --allow-read --allow-write
 
-// .githooks/bluesky-bot/install.ts
-// Installs the Bluesky commit poster git hook into the current repository.
-// This script is designed to be run from within the .githooks/bluesky-bot/ directory
-// or from a remote location via `deno run -A <url>`.
+/**
+ * @module
+ *
+ * Bluesky Bot Installer - Sets up git hooks for automatic Bluesky posting.
+ *
+ * This installer creates a git hook (default: pre-push) that automatically posts
+ * commits to Bluesky when they contain semantic versions or the @publish keyword.
+ *
+ * @example
+ * ```bash
+ * # Install with default settings (pre-push hook)
+ * deno run -A jsr:@srdjan/bluesky-bot/install
+ *
+ * # Install as post-commit hook
+ * deno run -A jsr:@srdjan/bluesky-bot/install --hook=post-commit
+ *
+ * # Force overwrite existing hook
+ * deno run -A jsr:@srdjan/bluesky-bot/install --force
+ * ```
+ */
 
-import { dirname, join, resolve } from "jsr:@std/path@1.0.8";
+import { join } from "@std/path";
 
 const decoder = new TextDecoder();
 
@@ -122,43 +138,46 @@ Environment:
 
 // =============== Installation Logic ===============
 
-async function detectBotLocation(): Promise<string> {
-  // Determine where the bot files are located
-  const scriptPath = resolve(dirname(new URL(import.meta.url).pathname));
-
-  // Check if we're running from .githooks/bluesky-bot/
-  if (scriptPath.endsWith(".githooks/bluesky-bot") || scriptPath.endsWith(".githooks\\bluesky-bot")) {
-    return scriptPath;
-  }
-
-  // If running remotely or from elsewhere, we can't determine location
-  // User will need to have copied the files first
-  throw new Error(
-    "Could not detect bot location. Please copy .githooks/bluesky-bot/ to your repository first.",
-  );
+function detectBotLocation(): string {
+  // For JSR distribution, we don't need to detect location
+  // The hook script will call jsr:@srdjan/bluesky-bot directly
+  // This function is kept for compatibility but returns empty string
+  return "";
 }
 
-async function installEnvExample(repoRoot: string, botDir: string) {
+async function installEnvExample(repoRoot: string, _botDir: string) {
   const envPath = join(repoRoot, ".env");
-  const envExampleSource = join(botDir, ".env.example");
 
   if (await pathExists(envPath)) {
     console.log(`✓ .env already exists at repository root`);
     return;
   }
 
-  if (!(await pathExists(envExampleSource))) {
-    console.warn(`⚠ .env.example not found, skipping environment setup`);
-    return;
-  }
+  // Create .env with template content
+  const envTemplate = `# Bluesky Credentials (required)
+BSKY_HANDLE=your-handle.bsky.social
+BSKY_APP_PASSWORD=your-app-password
 
-  const exampleContent = await Deno.readTextFile(envExampleSource);
-  await Deno.writeTextFile(envPath, exampleContent);
-  console.log(`✓ Created .env from .env.example`);
+# Optional: Bluesky service URL (defaults to https://bsky.social)
+# BLUESKY_SERVICE=https://bsky.social
+
+# Optional: Enable dry-run mode (preview posts without publishing)
+# BLUESKY_DRYRUN=on
+
+# Optional: OpenAI API key for AI-powered commit message summarization
+# OPENAI_API_KEY=sk-...
+
+# Optional: Control AI summarization (on by default if OPENAI_API_KEY is set)
+# AI_SUMMARY=on
+`;
+
+  await Deno.writeTextFile(envPath, envTemplate);
+  console.log(`✓ Created .env template at repository root`);
   console.log(`  Please edit ${envPath} and add your Bluesky credentials`);
+  console.log(`  Get an app password at: https://account.bsky.app/settings/app-passwords`);
 }
 
-async function installHook(hookDir: string, hookName: string, botDir: string, force: boolean) {
+async function installHook(hookDir: string, hookName: string, _botDir: string, force: boolean) {
   const hookPath = join(hookDir, hookName);
 
   await Deno.mkdir(hookDir, { recursive: true });
@@ -170,7 +189,7 @@ async function installHook(hookDir: string, hookName: string, botDir: string, fo
     Deno.exit(1);
   }
 
-  // Create a hook script that references the bot's location
+  // Create a hook script that calls the JSR package
   const hookScript = `#!/usr/bin/env bash
 set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
@@ -182,8 +201,8 @@ if ! command -v deno >/dev/null 2>&1; then
   exit 0
 fi
 
-# Run the bot from its location
-exec deno run --allow-env --allow-net --allow-run --allow-read --allow-write .githooks/bluesky-bot/mod.ts
+# Run the bot from JSR
+exec deno run --allow-env --allow-net --allow-run --allow-read --allow-write jsr:@srdjan/bluesky-bot
 `;
 
   await Deno.writeTextFile(hookPath, hookScript);
@@ -197,26 +216,27 @@ exec deno run --allow-env --allow-net --allow-run --allow-read --allow-write .gi
 
 async function validateInstallation(repoRoot: string) {
   const envPath = join(repoRoot, ".env");
-  const botPath = join(repoRoot, ".githooks/bluesky-bot/mod.ts");
-
   const hasEnv = await pathExists(envPath);
-  const hasBot = await pathExists(botPath);
 
   console.log("\n=== Installation Summary ===");
-  console.log(`Bot script:   ${hasBot ? "✓" : "✗"} ${botPath}`);
   console.log(`Environment:  ${hasEnv ? "✓" : "✗"} ${envPath}`);
+  console.log(`Bot package:  ✓ jsr:@srdjan/bluesky-bot`);
 
   if (!hasEnv) {
     console.log("\n⚠ Next steps:");
     console.log("  1. Edit .env and add your Bluesky credentials:");
     console.log("     BSKY_HANDLE=yourname.bsky.social");
     console.log("     BSKY_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx");
+    console.log("  2. Get an app password at: https://account.bsky.app/settings/app-passwords");
   }
 
-  if (hasEnv && hasBot) {
+  if (hasEnv) {
     console.log("\n✓ Installation complete!");
     console.log("\nTest the bot with:");
-    console.log("  BLUESKY_DRYRUN=on deno run --allow-env --allow-net --allow-run --allow-read --allow-write .githooks/bluesky-bot/mod.ts");
+    console.log("  BLUESKY_DRYRUN=on deno run -A jsr:@srdjan/bluesky-bot");
+    console.log("\nMake a commit and push to trigger the hook:");
+    console.log("  git commit -m 'feat: new feature v1.0.0'");
+    console.log("  git push");
   }
 }
 
@@ -243,7 +263,9 @@ if (import.meta.main) {
       `\nYou can customize the hook directory with 'git config core.hooksPath <path>' or GIT_HOOK_DIR env var.`,
     );
   } catch (error) {
-    console.error(`Installation failed: ${error.message}`);
+    console.error(
+      `Installation failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
     Deno.exit(1);
   }
 }

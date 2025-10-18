@@ -1,15 +1,21 @@
 {
   "version": "5",
   "specifiers": {
-    "npm:@atproto/api@*": "0.17.3"
+    "jsr:@std/path@1.0.8": "1.0.8",
+    "npm:@atproto/api@~0.13.14": "0.13.35"
+  },
+  "jsr": {
+    "@std/path@1.0.8": {
+      "integrity": "548fa456bb6a04d3c1a1e7477986b6cffbce95102d0bb447c67c4ee70e0364be"
+    }
   },
   "npm": {
-    "@atproto/api@0.17.3": {
-      "integrity": "sha512-pdQXhUAapNPdmN00W0vX5ta/aMkHqfgBHATt20X02XwxQpY2AnrPm2Iog4FyjsZqoHooAtCNV/NWJ4xfddJzsg==",
+    "@atproto/api@0.13.35": {
+      "integrity": "sha512-vsEfBj0C333TLjDppvTdTE0IdKlXuljKSveAeI4PPx/l6eUKNnDTsYxvILtXUVzwUlTDmSRqy5O4Ryh78n1b7g==",
       "dependencies": [
         "@atproto/common-web",
         "@atproto/lexicon",
-        "@atproto/syntax",
+        "@atproto/syntax@0.3.4",
         "@atproto/xrpc",
         "await-lock",
         "multiformats",
@@ -26,21 +32,24 @@
         "zod"
       ]
     },
-    "@atproto/lexicon@0.5.1": {
-      "integrity": "sha512-y8AEtYmfgVl4fqFxqXAeGvhesiGkxiy3CWoJIfsFDDdTlZUC8DFnZrYhcqkIop3OlCkkljvpSJi1hbeC1tbi8A==",
+    "@atproto/lexicon@0.4.14": {
+      "integrity": "sha512-jiKpmH1QER3Gvc7JVY5brwrfo+etFoe57tKPQX/SmPwjvUsFnJAow5xLIryuBaJgFAhnTZViXKs41t//pahGHQ==",
       "dependencies": [
         "@atproto/common-web",
-        "@atproto/syntax",
+        "@atproto/syntax@0.4.1",
         "iso-datestring-validator",
         "multiformats",
         "zod"
       ]
     },
+    "@atproto/syntax@0.3.4": {
+      "integrity": "sha512-8CNmi5DipOLaVeSMPggMe7FCksVag0aO6XZy9WflbduTKM4dFZVCs4686UeMLfGRXX+X966XgwECHoLYrovMMg=="
+    },
     "@atproto/syntax@0.4.1": {
       "integrity": "sha512-CJdImtLAiFO+0z3BWTtxwk6aY5w4t8orHTMVJgkf++QRJWTxPbIFko/0hrkADB7n2EruDxDSeAgfUGehpH6ngw=="
     },
-    "@atproto/xrpc@0.7.5": {
-      "integrity": "sha512-MUYNn5d2hv8yVegRL0ccHvTHAVj5JSnW07bkbiaz96UH45lvYNRVwt44z+yYVnb0/mvBzyD3/ZQ55TRGt7fHkA==",
+    "@atproto/xrpc@0.6.12": {
+      "integrity": "sha512-Ut3iISNLujlmY9Gu8sNU+SPDJDvqlVzWddU8qUr0Yae5oD4SguaUFjjhireMGhQ3M5E0KljQgDbTmnBo1kIZ3w==",
       "dependencies": [
         "@atproto/lexicon",
         "zod"
@@ -74,7 +83,8 @@
   },
   "workspace": {
     "dependencies": [
-      "npm:@atproto/api@*"
+      "jsr:@std/path@1.0.8",
+      "npm:@atproto/api@~0.13.14"
     ]
   }
 }

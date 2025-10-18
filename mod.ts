@@ -1,19 +1,45 @@
 #!/usr/bin/env -S deno run --allow-env --allow-net --allow-run --allow-read --allow-write
 
-// .githooks/bluesky-bot/mod.ts
-// Post latest commit to Bluesky when commit message contains "@publish" or a semantic version.
-// Intended to be run from a local git hook (e.g., pre-push or post-commit).
-//
-// Required env:
-//   BSKY_HANDLE          e.g. "yourname.bsky.social" (or DID)
-//   BSKY_APP_PASSWORD    app password from Bluesky settings
-// Optional env:
-//   BLUESKY_DRYRUN=on    don't post, just print
-//   AI_SUMMARY=on/off    enable/disable OpenAI summarization (default: on if key present)
-//   OPENAI_API_KEY       enables AI-powered summary
-//   BLUESKY_SERVICE      AT Protocol service URL (default: https://bsky.social)
-//
-// Deduplication: Uses .git/aug-bluesky-posted to track posted commit SHAs locally.
+/**
+ * @module
+ *
+ * Bluesky Commit Poster - Automatically posts git commits to Bluesky.
+ *
+ * Posts commits to Bluesky when the commit message contains either:
+ * - A semantic version (e.g., `1.2.3`, `v2.0.0-beta.1`)
+ * - The `@publish` keyword
+ *
+ * Designed to run from git hooks (pre-push, post-commit) or as a CLI command.
+ *
+ * ## Features
+ * - **Trigger-based posting**: Only posts when commit contains semver or @publish
+ * - **Local deduplication**: Tracks posted commits in `.git/aug-bluesky-posted`
+ * - **AI summarization**: Optional OpenAI integration for condensed messages
+ * - **Dry-run mode**: Preview posts without publishing
+ * - **GitHub integration**: Automatically adds commit URLs to posts
+ *
+ * ## Environment Variables
+ *
+ * **Required:**
+ * - `BSKY_HANDLE` - Your Bluesky handle (e.g., "yourname.bsky.social") or DID
+ * - `BSKY_APP_PASSWORD` - App password from Bluesky settings
+ *
+ * **Optional:**
+ * - `BLUESKY_SERVICE` - AT Protocol service URL (default: https://bsky.social)
+ * - `BLUESKY_DRYRUN=on` - Preview mode, doesn't actually post
+ * - `OPENAI_API_KEY` - Enables AI-powered commit message summarization
+ * - `AI_SUMMARY=on|off` - Control AI summarization (default: on if key present)
+ *
+ * @example
+ * ```bash
+ * # Run manually with dry-run
+ * BLUESKY_DRYRUN=on deno run -A jsr:@srdjan/bluesky-bot
+ *
+ * # Run from git hook (installed via install.ts)
+ * git commit -m "feat: new feature v1.0.0"
+ * git push  # Automatically posts to Bluesky
+ * ```
+ */
 
 import { BskyAgent } from "@atproto/api";
 
@@ -46,8 +72,7 @@ type BlueskyError =
   | { readonly type: "AuthFailed"; readonly message: string }
   | { readonly type: "PostFailed"; readonly message: string };
 
-type ConfigError =
-  | { readonly type: "MissingCredentials"; readonly message: string };
+type ConfigError = { readonly type: "MissingCredentials"; readonly message: string };
 
 // Domain types
 type Config = {
