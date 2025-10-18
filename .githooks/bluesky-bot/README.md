@@ -13,20 +13,42 @@ Automatically post your git commits to Bluesky when they contain a semantic vers
 
 ## Quick Start
 
-### 1. Install the Bot
+### 1. Install Deno (if not already installed)
+
+```bash
+# macOS / Linux / WSL
+curl -fsSL https://deno.land/install.sh | sh
+
+# macOS (via Homebrew)
+brew install deno
+
+# Windows (PowerShell)
+irm https://deno.land/install.ps1 | iex
+```
+
+See [deno.land](https://deno.land/manual/getting_started/installation) for more options.
+
+### 2. Install the Bot
 
 Copy the `.githooks/bluesky-bot/` folder to your repository, then run:
 
+**Option A: Shell Script**
+```bash
+.githooks/bluesky-bot/install.sh
+```
+
+**Option B: Deno Script**
 ```bash
 deno run --allow-env --allow-run --allow-read --allow-write .githooks/bluesky-bot/install.ts
 ```
 
-This will:
+The installer will:
+- ✅ Verify Deno is installed
 - ✅ Install the pre-push git hook
 - ✅ Create `.env` from `.env.example` (if it doesn't exist)
 - ✅ Validate the installation
 
-### 2. Configure Credentials
+### 3. Configure Credentials
 
 Edit `.env` in your repository root:
 
@@ -37,7 +59,7 @@ BSKY_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
 
 **Important**: Generate an app password at [bsky.app/settings/app-passwords](https://bsky.app/settings/app-passwords) - don't use your account password!
 
-### 3. Test It
+### 4. Test It
 
 Run a dry-run test:
 
@@ -89,6 +111,12 @@ All configuration is done via environment variables in `.env`:
 
 Install to `post-commit` instead of `pre-push`:
 
+**Shell script:**
+```bash
+.githooks/bluesky-bot/install.sh --hook=post-commit
+```
+
+**Deno script:**
 ```bash
 deno run -A .githooks/bluesky-bot/install.ts --hook=post-commit
 ```
@@ -99,17 +127,23 @@ If your repository uses a custom hooks directory:
 
 ```bash
 git config core.hooksPath .githooks
-deno run -A .githooks/bluesky-bot/install.ts
+.githooks/bluesky-bot/install.sh
 ```
 
 Or set it via environment variable:
 
 ```bash
-GIT_HOOK_DIR=.githooks deno run -A .githooks/bluesky-bot/install.ts
+GIT_HOOK_DIR=.githooks ./githooks/bluesky-bot/install.sh
 ```
 
 ### Force Overwrite Existing Hook
 
+**Shell script:**
+```bash
+.githooks/bluesky-bot/install.sh --force
+```
+
+**Deno script:**
 ```bash
 deno run -A .githooks/bluesky-bot/install.ts --force
 ```
@@ -195,7 +229,8 @@ BLUESKY_DRYRUN=on deno run --allow-env --allow-net --allow-run --allow-read --al
 ```
 .githooks/bluesky-bot/
 ├── mod.ts           # Main bot script (self-contained)
-├── install.ts       # Installation script
+├── install.sh       # Shell installer (no Deno required)
+├── install.ts       # Deno installer (alternative)
 ├── .env.example     # Environment variable template
 ├── deno.json        # Deno configuration (imports)
 └── README.md        # This file
