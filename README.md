@@ -135,8 +135,26 @@ deno serve --allow-net --allow-env main.ts
 Then simulate a GitHub push:
 
 ```bash
-# Prepare a sample payload (already included under payloads/push.sample.json)
-payload=payloads/push.sample.json
+# Prepare a sample payload
+cat <<'EOF' > /tmp/push.sample.json
+{
+  "ref": "refs/heads/main",
+  "repository": {
+    "full_name": "owner/repo",
+    "html_url": "https://github.com/owner/repo",
+    "default_branch": "main"
+  },
+  "head_commit": {
+    "id": "3f2a1b9abc1234567890def0123456789abcdeff",
+    "message": "feat: add streaming CSV export v1.2.3\n\n- endpoint /export/csv\n- streams rows",
+    "author": {
+      "name": "Alice"
+    }
+  }
+}
+EOF
+
+payload=/tmp/push.sample.json
 sig="sha256=$(echo -n "$(cat ${payload})" | openssl dgst -sha256 -hmac "$GITHUB_WEBHOOK_SECRET" -binary | xxd -p -c 256)"
 
 curl -i -X POST http://localhost:8000/webhook   -H "content-type: application/json"   -H "x-github-event: push"   -H "x-hub-signature-256: $sig"   --data @"$payload"

@@ -218,26 +218,6 @@ if (import.meta.main) {
   const condensed = await aiCondense(sanitized);
   const repoUrl = repo ? `https://github.com/${repo}` : "";
   const text = (repoUrl ? `${condensed}\n${repoUrl}` : condensed).trim();
-  // Save payload for testing/audit
-  try {
-    await Deno.mkdir("payloads", { recursive: true });
-    const payloadRecord = {
-      source: "local-git-hook",
-      dryrun: BLUESKY_DRYRUN.toLowerCase() === "on",
-      sha,
-      author,
-      repo,
-      commitUrl,
-      text,
-      createdAt: new Date().toISOString(),
-    };
-    const filePath = `payloads/bluesky.${sha}.json`;
-    await Deno.writeTextFile(filePath, JSON.stringify(payloadRecord, null, 2));
-    console.log(`[payload] wrote ${filePath}`);
-  } catch (e) {
-    console.warn("Failed to write payload file:", e);
-  }
-
   if (BLUESKY_DRYRUN.toLowerCase() === "on") {
     console.log(`[dryrun] would post: ${text}`);
     Deno.exit(0);
