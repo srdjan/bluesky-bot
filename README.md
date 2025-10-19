@@ -52,12 +52,12 @@ Install as a dev dependency in your Deno project:
 
 ```bash
 # Add to your project
-deno add --dev @srdjan/bluesky-bot
+deno add --dev jsr:@srdjan/bluesky-bot
 
 # Run the installer to set up git hook
 deno run -A jsr:@srdjan/bluesky-bot/install
 
-# Configure your credentials
+# Configure your credentials`
 # Edit .env and add BSKY_HANDLE and BSKY_APP_PASSWORD
 ```
 
