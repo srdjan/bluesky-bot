@@ -41,7 +41,7 @@
  * ```
  */
 
-import { BskyAgent, RichText } from "@atproto/api";
+import { type AppBskyEmbedExternal, BskyAgent, RichText } from "@atproto/api";
 
 // =============== Constants ===============
 
@@ -82,6 +82,13 @@ type Config = {
   readonly dryRun: boolean;
 };
 
+type RepoData = {
+  readonly topics: readonly string[];
+  readonly name: string;
+  readonly description: string;
+  readonly htmlUrl: string;
+};
+
 type CommitInfo = {
   readonly sha: string;
   readonly message: string;
@@ -89,7 +96,7 @@ type CommitInfo = {
   readonly branch: string;
   readonly repo: string;
   readonly commitUrl: string;
-  readonly topics: readonly string[];
+  readonly repoData?: RepoData;
 };
 
 // =============== Inlined Environment Utilities ===============
@@ -179,8 +186,8 @@ function topicToHashtag(topic: string): string {
     .join("");
 }
 
-async function fetchGitHubTopics(repo: string): Promise<readonly string[]> {
-  if (!repo) return [];
+async function fetchGitHubRepoData(repo: string): Promise<RepoData | undefined> {
+  if (!repo) return undefined;
 
   try {
     const response = await fetch(`https://api.github.com/repos/${repo}`, {
@@ -190,12 +197,17 @@ async function fetchGitHubTopics(repo: string): Promise<readonly string[]> {
       },
     });
 
-    if (!response.ok) return [];
+    if (!response.ok) return undefined;
 
     const data = await response.json();
-    return (data.topics ?? []) as string[];
+    return {
+      topics: (data.topics ?? []) as string[],
+      name: data.name ?? repo.split("/")[1] ?? repo,
+      description: data.description ?? "",
+      htmlUrl: data.html_url ?? `https://github.com/${repo}`,
+    };
   } catch {
-    return [];
+    return undefined;
   }
 }
 
@@ -273,7 +285,7 @@ async function latestCommitInfo(): Promise<Result<CommitInfo, GitError>> {
 
   let repo = "";
   let commitUrl = "";
-  let topics: readonly string[] = [];
+  let repoData: RepoData | undefined = undefined;
 
   const remoteResult = await runGit(["config", "--get", "remote.origin.url"]);
   if (remoteResult.ok) {
@@ -286,12 +298,12 @@ async function latestCommitInfo(): Promise<Result<CommitInfo, GitError>> {
     if (m) {
       repo = `${m[1]}/${m[2]}`;
       commitUrl = `https://github.com/${repo}/commit/${sha}`;
-      // Fetch topics from GitHub API
-      topics = await fetchGitHubTopics(repo);
+      // Fetch full repo data from GitHub API
+      repoData = await fetchGitHubRepoData(repo);
     }
   }
 
-  return ok({ sha, message, author: authorName, branch, repo, commitUrl, topics });
+  return ok({ sha, message, author: authorName, branch, repo, commitUrl, repoData });
 }
 
 // =============== Deduplication (local file) ===============
@@ -431,21 +443,35 @@ async function shouldPost(commit: CommitInfo): Promise<boolean> {
   return true;
 }
 
+function createExternalEmbed(
+  repoData: RepoData,
+): AppBskyEmbedExternal.Main {
+  return {
+    $type: "app.bsky.embed.external",
+    external: {
+      uri: repoData.htmlUrl,
+      title: repoData.name,
+      description: repoData.description || "GitHub repository",
+    },
+  };
+}
+
 async function composePost(commit: CommitInfo): Promise<string> {
   const firstLine = commit.message.split("\n")[0].trim();
   const sanitized = stripCommitHashes(firstLine);
-  const hasTopics = commit.topics.length > 0;
+  const hasTopics = (commit.repoData?.topics.length ?? 0) > 0;
 
   // AI condense with topic awareness (won't add hashtags if we have topics)
   const condensed = await aiCondense(sanitized, hasTopics);
 
   // Add repository topics as hashtags
-  const topicHashtags = hasTopics ? "\n" + commit.topics.map(topicToHashtag).join(" ") : "";
+  const topicHashtags = hasTopics && commit.repoData
+    ? "\n" + commit.repoData.topics.map(topicToHashtag).join(" ")
+    : "";
 
-  const repoUrl = commit.repo ? `https://github.com/${commit.repo}` : "";
-
-  // Compose final post: text + topics + repo URL
-  const parts = [condensed, topicHashtags, repoUrl].filter(Boolean);
+  // URL will be in the embed card, so don't include it in the text
+  // Compose final post: text + topics (URL in embed card)
+  const parts = [condensed, topicHashtags].filter(Boolean);
   return parts.join("\n").trim();
 }
 
@@ -454,8 +480,17 @@ async function publishPost(
   commit: CommitInfo,
   text: string,
 ): Promise<Result<void, BlueskyError>> {
+  // Create embed card if we have repo data
+  const embed = commit.repoData ? createExternalEmbed(commit.repoData) : undefined;
+
   if (config.dryRun) {
     console.log(`[dryrun] would post: ${text}`);
+    if (embed) {
+      console.log(`[dryrun] with embed card:`);
+      console.log(`  Title: ${embed.external.title}`);
+      console.log(`  URL: ${embed.external.uri}`);
+      console.log(`  Description: ${embed.external.description}`);
+    }
     return ok(undefined);
   }
 
@@ -479,6 +514,8 @@ async function publishPost(
     const result = await agent.post({
       text: richText.text,
       facets: richText.facets,
+      embed,
+      createdAt: new Date().toISOString(),
     });
 
     await markSeenSha(commit.sha);
