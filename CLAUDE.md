@@ -29,7 +29,7 @@ deno task install                   # Install git hook
 deno task setup                     # Install git hook (alias)
 deno task validate                  # Validate credentials
 deno task post                      # Run bot (posts to Bluesky)
-deno task test                      # Dry run (preview without posting)
+deno task test                      # Test auth + dry run (validate credentials and preview without posting)
 deno task fmt                       # Format code
 deno task lint                      # Lint code
 ```
@@ -128,6 +128,7 @@ Optional:
 
 - `BLUESKY_SERVICE` - AT Protocol service (defaults to https://bsky.social)
 - `BLUESKY_DRYRUN=on` - Preview mode without posting
+- `BLUESKY_FORCE=on` - Bypass trigger gates (useful for testing, always shows preview)
 - `AI_SUMMARY` - Toggle AI summarization (`on` by default if OpenAI key present)
 - `OPENAI_API_KEY` - Enables AI-powered commit message condensation
 
@@ -206,8 +207,8 @@ BLUESKY_DRYRUN=on deno run -A mod.ts
 
 ### Testing Workflow
 
-1. **Validate setup**: `deno task validate --test-auth`
-2. **Preview post**: `deno task test` (dry-run mode)
+1. **Full test**: `deno task test` (validates credentials + dry-run preview)
+2. **Validate only**: `deno task validate --test-auth` (just check credentials)
 3. **Check topics**: `curl https://api.github.com/repos/owner/repo | grep topics`
 4. **Make test commit**: `git commit --allow-empty -m "Test v1.0.0 @publish"`
 5. **Verify output**: Check dry-run output for hashtags and formatting

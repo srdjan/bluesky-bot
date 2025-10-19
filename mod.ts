@@ -27,6 +27,7 @@
  * **Optional:**
  * - `BLUESKY_SERVICE` - AT Protocol service URL (default: https://bsky.social)
  * - `BLUESKY_DRYRUN=on` - Preview mode, doesn't actually post
+ * - `BLUESKY_FORCE=on` - Bypass trigger gates (useful for testing, always shows preview)
  * - `OPENAI_API_KEY` - Enables AI-powered commit message summarization
  * - `AI_SUMMARY=on|off` - Control AI summarization (default: on if key present)
  *
@@ -87,6 +88,7 @@ type RepoData = {
   readonly name: string;
   readonly description: string;
   readonly htmlUrl: string;
+  readonly homepage?: string;
 };
 
 type CommitInfo = {
@@ -200,11 +202,19 @@ async function fetchGitHubRepoData(repo: string): Promise<RepoData | undefined> 
     if (!response.ok) return undefined;
 
     const data = await response.json();
+
+    // Extract homepage URL if present and non-empty
+    const homepage =
+      data.homepage && typeof data.homepage === "string" && data.homepage.trim().length > 0
+        ? data.homepage.trim()
+        : undefined;
+
     return {
       topics: (data.topics ?? []) as string[],
       name: data.name ?? repo.split("/")[1] ?? repo,
       description: data.description ?? "",
       htmlUrl: data.html_url ?? `https://github.com/${repo}`,
+      homepage,
     };
   } catch {
     return undefined;
@@ -425,7 +435,15 @@ function loadConfig(env: Record<string, string>): Result<Config, ConfigError> {
   return ok({ service, handle, password, dryRun });
 }
 
-async function shouldPost(commit: CommitInfo): Promise<boolean> {
+async function shouldPost(commit: CommitInfo, env: Record<string, string>): Promise<boolean> {
+  const force = firstEnv(env, ["BLUESKY_FORCE"]).toLowerCase() === "on";
+
+  // Force mode bypasses all gates (useful for testing)
+  if (force) {
+    console.log(`[force] bypassing trigger gates for testing`);
+    return true;
+  }
+
   // Gate 1: @publish OR semver
   if (!hasPublishKeyword(commit.message) && !hasSemver(commit.message)) {
     console.log(
@@ -446,10 +464,13 @@ async function shouldPost(commit: CommitInfo): Promise<boolean> {
 function createExternalEmbed(
   repoData: RepoData,
 ): AppBskyEmbedExternal.Main {
+  // Use homepage URL if available, otherwise fall back to GitHub repository URL
+  const uri = repoData.homepage ?? repoData.htmlUrl;
+
   return {
     $type: "app.bsky.embed.external",
     external: {
-      uri: repoData.htmlUrl,
+      uri,
       title: repoData.name,
       description: repoData.description || "GitHub repository",
     },
@@ -566,7 +587,7 @@ async function run(): Promise<number> {
     const commit = commitResult.value;
 
     // Check if we should post
-    if (!(await shouldPost(commit))) {
+    if (!(await shouldPost(commit, env))) {
       return 0;
     }
 

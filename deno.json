@@ -1,6 +1,6 @@
 {
   "name": "@srdjan/bluesky-bot",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "exports": {
     ".": "./mod.ts",
     "./install": "./install.ts",
@@ -11,7 +11,7 @@
     "install": "deno run -A install.ts",
     "validate": "deno run -A validate.ts",
     "post": "deno run -A mod.ts",
-    "test": "BLUESKY_DRYRUN=on deno run -A mod.ts",
+    "test": "deno run -A validate.ts --test-auth && BLUESKY_FORCE=on BLUESKY_DRYRUN=on deno run -A mod.ts",
     "fmt": "deno fmt",
     "lint": "deno lint"
   },
