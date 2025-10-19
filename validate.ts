@@ -163,7 +163,7 @@ async function testAuthentication(
   }
 }
 
-async function runValidation(testAuth: boolean): Promise<ValidationResult> {
+async function runValidation(): Promise<ValidationResult> {
   const envFileExists = await checkEnvFileExists();
 
   loadDotenv();
@@ -330,7 +330,7 @@ This script validates your Bluesky bot configuration by checking:
   }
 
   try {
-    const result = await runValidation(testAuth);
+    const result = await runValidation();
 
     let authResult: Result<string, string> | undefined;
 

@@ -89,6 +89,7 @@ type CommitInfo = {
   readonly branch: string;
   readonly repo: string;
   readonly commitUrl: string;
+  readonly topics: readonly string[];
 };
 
 // =============== Inlined Environment Utilities ===============
@@ -150,6 +151,53 @@ function stripCommitHashes(input: string): string {
 const hasPublishKeyword = (msg: string): boolean => PUBLISH_KEYWORD_REGEX.test(msg);
 const hasSemver = (msg: string): boolean => SEMVER_REGEX.test(msg);
 const shortSha = (sha: string): string => sha.slice(0, 7);
+
+function topicToHashtag(topic: string): string {
+  // Special cases for common tech brands
+  const specialCases: Record<string, string> = {
+    "typescript": "TypeScript",
+    "javascript": "JavaScript",
+    "nodejs": "NodeJS",
+    "github": "GitHub",
+    "webassembly": "WebAssembly",
+    "postgresql": "PostgreSQL",
+    "mongodb": "MongoDB",
+    "graphql": "GraphQL",
+  };
+
+  // Check if topic is a special case
+  const lowerTopic = topic.toLowerCase();
+  if (specialCases[lowerTopic]) {
+    return "#" + specialCases[lowerTopic];
+  }
+
+  // Convert topic to hashtag with PascalCase
+  // Examples: "bluesky-client" → "#BlueskyClient", "deno" → "#Deno"
+  return "#" + topic
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join("");
+}
+
+async function fetchGitHubTopics(repo: string): Promise<readonly string[]> {
+  if (!repo) return [];
+
+  try {
+    const response = await fetch(`https://api.github.com/repos/${repo}`, {
+      headers: {
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "bluesky-bot",
+      },
+    });
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    return (data.topics ?? []) as string[];
+  } catch {
+    return [];
+  }
+}
 
 async function runGit(args: string[]): Promise<Result<string, GitError>> {
   try {
@@ -225,6 +273,7 @@ async function latestCommitInfo(): Promise<Result<CommitInfo, GitError>> {
 
   let repo = "";
   let commitUrl = "";
+  let topics: readonly string[] = [];
 
   const remoteResult = await runGit(["config", "--get", "remote.origin.url"]);
   if (remoteResult.ok) {
@@ -237,10 +286,12 @@ async function latestCommitInfo(): Promise<Result<CommitInfo, GitError>> {
     if (m) {
       repo = `${m[1]}/${m[2]}`;
       commitUrl = `https://github.com/${repo}/commit/${sha}`;
+      // Fetch topics from GitHub API
+      topics = await fetchGitHubTopics(repo);
     }
   }
 
-  return ok({ sha, message, author: authorName, branch, repo, commitUrl });
+  return ok({ sha, message, author: authorName, branch, repo, commitUrl, topics });
 }
 
 // =============== Deduplication (local file) ===============
@@ -266,12 +317,22 @@ async function markSeenSha(sha: string): Promise<void> {
 
 // =============== Optional AI Condense ===============
 
-async function aiCondense(text: string): Promise<string> {
+async function aiCondense(text: string, hasTopics: boolean): Promise<string> {
   const env = Deno.env.toObject();
   const aiSummary = firstEnv(env, ["AI_SUMMARY"], "on").toLowerCase();
   const openaiApiKey = firstEnv(env, ["OPENAI_API_KEY"], "");
 
   if (!openaiApiKey || aiSummary === "off") return text;
+
+  // Adjust prompt based on whether we have repository topics
+  const systemPrompt = hasTopics
+    ? "You are a concise release/commit summarizer for social media. Write in first-person, author's commentary voice. Be specific and human. Exclude git commit hashes/SHAs. Keep semantic version identifiers if present. DO NOT add hashtags (they will be added from repository topics). No quotes."
+    : "You are a concise release/commit summarizer for social media. Write in first-person, author's commentary voice. Be specific and human. Exclude git commit hashes/SHAs. Keep semantic version identifiers if present. Add 2-4 relevant hashtags at the end based on the content (e.g., #TypeScript #Deno #OpenSource #WebDev #Release). No quotes.";
+
+  const userPrompt = hasTopics
+    ? `Summarize as a short first-person commentary (~20 words). Do not include any git hashes/SHAs or hashtags. Keep semver if present:\n"${text}"`
+    : `Summarize as a short first-person commentary (~20 words), then add 2-4 relevant hashtags. Do not include any git hashes/SHAs. Keep semver if present:\n"${text}"`;
+
   try {
     const res = await fetch(OPENAI_API_URL, {
       method: "POST",
@@ -284,13 +345,11 @@ async function aiCondense(text: string): Promise<string> {
         messages: [
           {
             role: "system",
-            content:
-              "You are a concise release/commit summarizer for social media. Write in first-person, author's commentary voice. Be specific and human. Exclude git commit hashes/SHAs. Keep semantic version identifiers if present. Add 2-4 relevant hashtags at the end based on the content (e.g., #TypeScript #Deno #OpenSource #WebDev #Release). No quotes.",
+            content: systemPrompt,
           },
           {
             role: "user",
-            content:
-              `Summarize as a short first-person commentary (~20 words), then add 2-4 relevant hashtags. Do not include any git hashes/SHAs. Keep semver if present:\n"${text}"`,
+            content: userPrompt,
           },
         ],
         temperature: 0.3,
@@ -375,9 +434,19 @@ async function shouldPost(commit: CommitInfo): Promise<boolean> {
 async function composePost(commit: CommitInfo): Promise<string> {
   const firstLine = commit.message.split("\n")[0].trim();
   const sanitized = stripCommitHashes(firstLine);
-  const condensed = await aiCondense(sanitized);
+  const hasTopics = commit.topics.length > 0;
+
+  // AI condense with topic awareness (won't add hashtags if we have topics)
+  const condensed = await aiCondense(sanitized, hasTopics);
+
+  // Add repository topics as hashtags
+  const topicHashtags = hasTopics ? "\n" + commit.topics.map(topicToHashtag).join(" ") : "";
+
   const repoUrl = commit.repo ? `https://github.com/${commit.repo}` : "";
-  return (repoUrl ? `${condensed}\n${repoUrl}` : condensed).trim();
+
+  // Compose final post: text + topics + repo URL
+  const parts = [condensed, topicHashtags, repoUrl].filter(Boolean);
+  return parts.join("\n").trim();
 }
 
 async function publishPost(

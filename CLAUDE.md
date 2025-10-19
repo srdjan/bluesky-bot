@@ -11,12 +11,23 @@ hook. Posts are published when commit messages contain either a semantic version
 
 **Distribution Model:** JSR package (`@srdjan/bluesky-bot`) installed as a dev dependency.
 
+**Key Features:**
+
+- 🎯 **Smart Hashtags**: Automatically fetches GitHub repository topics and converts them to
+  hashtags
+- ✅ **Credential Validation**: Built-in validator to test setup before first use
+- 🤖 **AI Summarization**: Optional OpenAI integration for concise commit messages
+- 🔄 **Local Deduplication**: Prevents duplicate posts
+- 🌐 **GitHub Integration**: Automatically adds commit URLs
+
 ## Common Development Commands
 
 ### Main Tasks
 
 ```bash
 deno task install                   # Install git hook
+deno task setup                     # Install git hook (alias)
+deno task validate                  # Validate credentials
 deno task post                      # Run bot (posts to Bluesky)
 deno task test                      # Dry run (preview without posting)
 deno task fmt                       # Format code
@@ -34,6 +45,12 @@ BLUESKY_DRYRUN=on deno run -A mod.ts
 
 # Install hook
 deno run -A install.ts
+
+# Validate credentials
+deno run -A validate.ts
+
+# Validate with API test
+deno run -A validate.ts --test-auth
 ```
 
 ### Hook Management
@@ -56,10 +73,13 @@ deno run -A install.ts --force
 1. **Trigger gates**: Commit must contain `@publish` keyword OR semantic version pattern
 2. **Local deduplication**: Posted SHAs are tracked in `.git/aug-bluesky-posted` to prevent
    reposting
-3. **Optional AI summarization**: If `OPENAI_API_KEY` is set and `AI_SUMMARY=on`, OpenAI condenses
-   commit messages
-4. **Sanitization**: Git SHAs are stripped from posts to keep them readable
-5. **Repository detection**: Parses `remote.origin.url` to generate GitHub commit URLs
+3. **GitHub topics fetch**: Fetches repository topics via GitHub API for hashtags
+4. **Optional AI summarization**: If `OPENAI_API_KEY` is set and `AI_SUMMARY=on`, OpenAI condenses
+   commit messages (skips hashtag generation if topics exist)
+5. **Hashtag generation**: Uses GitHub topics as hashtags; falls back to AI-generated hashtags if no
+   topics
+6. **Sanitization**: Git SHAs are stripped from posts to keep them readable
+7. **Repository detection**: Parses `remote.origin.url` to generate GitHub commit URLs
 
 ### Core Modules
 
@@ -70,8 +90,11 @@ deno run -A install.ts --force
 - Git command wrapper: `runGit(args)` with error handling
 - Trigger detection: `hasPublishKeyword()` and `hasSemver()`
 - Deduplication: `hasSeenSha()` / `markSeenSha()`
-- Optional AI: `aiCondense()` calls OpenAI's API
-- Post composition: strips commit hashes, adds repo URL, truncates to 300 chars
+- **GitHub topics**: `fetchGitHubTopics()` fetches topics via GitHub API
+- **Hashtag conversion**: `topicToHashtag()` converts topics to proper hashtags (TypeScript, etc.)
+- Optional AI: `aiCondense(text, hasTopics)` calls OpenAI's API with topic awareness
+- Post composition: strips commit hashes, adds topics as hashtags, adds repo URL, truncates to 300
+  chars
 - Custom dotenv loader: `loadDotenv()` parses `.env` with support for quotes and `export` prefix
 - Environment helper: `firstEnv()` resolves first non-empty value from multiple env var names
 
@@ -81,8 +104,18 @@ deno run -A install.ts --force
 - Respects `git config core.hooksPath` and `GIT_HOOK_DIR` env variable
 - Handles path resolution (absolute, relative, tilde-home paths)
 - Hook script calls `jsr:@srdjan/bluesky-bot` directly
-- Creates `.env` template if it doesn't exist
+- Creates enhanced `.env` template with comprehensive inline documentation
+- Professional error messages and help output
 - Includes deno availability check before execution
+
+**`validate.ts`** (credential validator)
+
+- Validates `.env` file presence and format
+- Checks required environment variables (BSKY_HANDLE, BSKY_APP_PASSWORD)
+- Validates credential format (handle and DID patterns)
+- Optional `--test-auth` flag to test credentials against Bluesky API
+- Clear, actionable validation output with troubleshooting guidance
+- Available via: `deno task validate` or `deno run -A jsr:@srdjan/bluesky-bot/validate`
 
 ### Environment Variables
 
@@ -115,9 +148,18 @@ Optional:
 
 - Uses first line of commit message only
 - Removes git SHAs (7-40 hex characters)
-- Adds GitHub commit URL when `remote.origin.url` is a GitHub repo
+- **Fetches GitHub topics and converts to hashtags** (e.g., `typescript` → `#TypeScript`)
+- If topics exist, AI skips hashtag generation; if no topics, AI generates contextual hashtags
 - AI summary (if enabled) creates ~20-word first-person commentary
+- Adds GitHub commit URL when `remote.origin.url` is a GitHub repo
 - Truncates to Bluesky's 300-character limit
+
+**Hashtag Conversion Examples:**
+
+- `typescript` → `#TypeScript` (special case)
+- `bluesky-client` → `#BlueskyClient` (PascalCase)
+- `deno` → `#Deno` (capitalize)
+- `javascript` → `#JavaScript`, `nodejs` → `#NodeJS`, `graphql` → `#GraphQL`
 
 **Error Handling**
 
@@ -138,7 +180,21 @@ Optional:
 
 ## Testing Strategy
 
-Use the dry-run mode to test without posting:
+### Validate Credentials
+
+Use the built-in validator to test your setup:
+
+```bash
+# Validate configuration only
+deno task validate
+
+# Test credentials against Bluesky API
+deno task validate --test-auth
+```
+
+### Dry-Run Mode
+
+Use the dry-run mode to preview posts without publishing:
 
 ```bash
 # Test with dry-run
@@ -148,15 +204,22 @@ BLUESKY_DRYRUN=on deno task post
 BLUESKY_DRYRUN=on deno run -A mod.ts
 ```
 
-To add authentication testing, create a test script that:
+### Testing Workflow
 
-1. Attempts login without posting
-2. Verifies credentials and reports success/failure
-3. Validates `.env` configuration
+1. **Validate setup**: `deno task validate --test-auth`
+2. **Preview post**: `deno task test` (dry-run mode)
+3. **Check topics**: `curl https://api.github.com/repos/owner/repo | grep topics`
+4. **Make test commit**: `git commit --allow-empty -m "Test v1.0.0 @publish"`
+5. **Verify output**: Check dry-run output for hashtags and formatting
 
 ## Troubleshooting
 
+- **Missing credentials**: Run `deno task validate --test-auth` to identify and fix credential
+  issues
 - **Hook not firing**: Check hook is executable (`chmod +x .git/hooks/pre-push`) and deno is in PATH
 - **Duplicate posts**: Delete or edit `.git/aug-bluesky-posted` to clear history
 - **AI summary errors**: Set `AI_SUMMARY=off` or unset `OPENAI_API_KEY` to disable
+- **No hashtags appearing**: Check repository has GitHub topics set via GitHub API or web interface
+- **Wrong hashtag format**: Review `topicToHashtag()` special cases in mod.ts
 - **Git command failures**: Error messages now include stderr output for debugging
+- **Validation failures**: Check `.env` file format and ensure no trailing spaces or quotes issues

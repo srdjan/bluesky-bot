@@ -6,6 +6,15 @@ keyword. It is designed to run from a local git hook (e.g. `pre-push`) or as an 
 No servers, webhooks, or external state—just your repo, your environment variables, and the Bluesky
 app password flow.
 
+## Key Features
+
+- 🎯 **Smart Hashtags**: Automatically uses GitHub repository topics as hashtags
+- 🤖 **AI Summarization**: Optional OpenAI integration for concise commit messages
+- ✅ **Credential Validation**: Test your setup before first use
+- 🔄 **Local Deduplication**: Prevents duplicate posts
+- 🌐 **GitHub Integration**: Automatically adds commit URLs
+- 🧪 **Dry-Run Mode**: Preview posts without publishing
+
 ---
 
 ## How It Works
@@ -14,8 +23,9 @@ app password flow.
 2. Reads the latest commit metadata using `git` commands.
 3. Skips the post unless the commit message includes a semantic version **or** `@publish`.
 4. Dedupes locally by storing posted SHAs in `.git/aug-bluesky-posted`.
-5. Optionally condenses the commit title with OpenAI (disabled when no key is present).
-6. Logs in with `@atproto/api`’s `BskyAgent` and creates a Bluesky post.
+5. **Fetches GitHub repository topics** and converts them to hashtags (e.g., `deno` → `#Deno`).
+6. Optionally condenses the commit title with OpenAI (disabled when no key is present).
+7. Logs in with `@atproto/api`'s `BskyAgent` and creates a Bluesky post with hashtags.
 
 If the script is run with `BLUESKY_DRYRUN=on`, it prints the post instead of publishing.
 
@@ -76,22 +86,28 @@ deno run -A jsr:@srdjan/bluesky-bot/install
 
 ## Quick Start
 
-After installation, test the bot with a dry run:
+After installation, validate your credentials and test the bot:
 
 ```bash
-# Preview what would be posted
-BLUESKY_DRYRUN=on deno run -A jsr:@srdjan/bluesky-bot
+# 1. Validate your configuration
+deno task validate --test-auth
 
-# Or use the task (if installed as dev dependency)
+# 2. Preview what would be posted (dry-run)
 deno task test
-```
 
-Make a commit with a version or `@publish` keyword:
-
-```bash
+# 3. Make a commit with a version or @publish keyword
 git commit -m "feat: new feature v1.0.0"
 git push  # Automatically posts to Bluesky!
 ```
+
+### First-Time Setup Checklist
+
+- [ ] Install the bot: `deno run -A jsr:@srdjan/bluesky-bot/install`
+- [ ] Edit `.env` and add your Bluesky credentials
+- [ ] Validate credentials: `deno task validate --test-auth`
+- [ ] (Optional) Set GitHub repository topics for hashtags
+- [ ] Test with dry-run: `deno task test`
+- [ ] Push a commit with `v1.0.0` or `@publish`
 
 ---
 
@@ -163,17 +179,149 @@ exec deno run --allow-env --allow-net --allow-run --allow-read --allow-write jsr
 
 - Uses the first line of the commit message (optionally condensed with OpenAI).
 - Removes obvious git SHAs to keep the post tidy.
+- **Automatically appends hashtags from GitHub repository topics** (if available).
+- Falls back to AI-generated hashtags if repository has no topics.
 - Appends the repository URL when available.
-- Truncates to Bluesky’s 300-character limit, adding an ellipsis if necessary.
+- Truncates to Bluesky's 300-character limit, adding an ellipsis if necessary.
+
+---
+
+## GitHub Topics as Hashtags
+
+The bot automatically fetches your repository's GitHub topics and converts them to hashtags in your
+posts.
+
+### How It Works
+
+**If your repository has topics set:**
+
+```
+GitHub Topics: ["deno", "typescript", "bluesky-client"]
+Post includes: #Deno #TypeScript #BlueskyClient
+```
+
+**If your repository has no topics:**
+
+- The AI (if enabled) generates contextual hashtags based on the commit message
+- Or posts without hashtags if AI is disabled
+
+### Setting GitHub Topics
+
+1. Go to your repository on GitHub
+2. Click "⚙️ Settings" (or edit the About section)
+3. Add topics like: `deno`, `typescript`, `cli-tool`, etc.
+4. The bot automatically fetches and converts them to proper hashtags
+
+### Hashtag Formatting
+
+The bot intelligently formats topics into hashtags:
+
+- **Special brands**: `typescript` → `#TypeScript`, `javascript` → `#JavaScript`
+- **Hyphenated topics**: `bluesky-client` → `#BlueskyClient`
+- **Single words**: `deno` → `#Deno`
+
+**Supported special cases:**
+
+- TypeScript, JavaScript, NodeJS, GitHub
+- PostgreSQL, MongoDB, GraphQL, WebAssembly
+
+### Example Post
+
+```
+Commit: "Add validation feature v1.2.0 @publish"
+Topics: ["deno", "typescript", "cli-tool"]
+
+Posted to Bluesky:
+───────────────────
+Added credential validation in v1.2.0 - users can now test their
+setup before first use!
+
+#Deno #TypeScript #CliTool
+https://github.com/yourname/yourrepo
+```
+
+---
+
+## Validation and Testing
+
+### Validate Your Configuration
+
+Before using the bot, validate your setup:
+
+```bash
+# Check configuration only
+deno task validate
+
+# Test credentials against Bluesky API
+deno task validate --test-auth
+```
+
+The validator checks:
+
+- ✅ `.env` file exists
+- ✅ Required environment variables are set
+- ✅ Credential format is valid
+- ✅ (Optional) Credentials work with Bluesky API
+
+### Example Validation Output
+
+```
+=== Bluesky Bot Configuration Validation ===
+
+✓ .env file: found
+✓ BSKY_HANDLE: set
+  ✓ Format: valid (yourname.bsky.social)
+✓ BSKY_APP_PASSWORD: set
+✓ Service: https://bsky.social
+
+✓ Authentication: SUCCESS
+  DID: did:plc:xxxxxxxxxxxxx
+
+=== Summary ===
+
+✓ Configuration is valid!
+```
 
 ---
 
 ## Troubleshooting
 
-- **Missing credentials**: the script exits with an error if handle or app password is absent.
-- **Git command failures**: errors now include stderr output for easier debugging.
-- **Duplicate posts**: delete or edit `.git/aug-bluesky-posted` if you intentionally need to repost.
-- **AI summary issues**: set `AI_SUMMARY=off` or unset `OPENAI_API_KEY` to skip condensation.
+### Common Issues
+
+**Missing credentials**
+
+- Run `deno task validate --test-auth` to identify missing variables
+- Check that `.env` file exists and has correct values
+- Get app password at: https://account.bsky.app/settings/app-passwords
+
+**Git command failures**
+
+- Errors now include stderr output for easier debugging
+- Ensure you're in a git repository
+- Check that `git` is installed and in PATH
+
+**Duplicate posts**
+
+- Delete or edit `.git/aug-bluesky-posted` to clear posted commit history
+- This is safe - it's just a local deduplication file
+
+**AI summary issues**
+
+- Set `AI_SUMMARY=off` in `.env` to disable AI summarization
+- Or unset `OPENAI_API_KEY` to skip condensation
+- Bot works fine without AI - it uses commit message as-is
+
+**No hashtags appearing**
+
+- Check if your repository has GitHub topics set
+- Run: `curl https://api.github.com/repos/owner/repo | grep topics`
+- If no topics, enable AI or manually add topics to your repository
+
+**Hook not firing**
+
+- Check hook is executable: `ls -la .git/hooks/pre-push`
+- Verify deno is in PATH: `which deno`
+- Check hook logs in terminal during `git push`
 
 ---
 
@@ -182,11 +330,26 @@ exec deno run --allow-env --allow-net --allow-run --allow-read --allow-write jsr
 ```
 mod.ts                # Main bot script (posts commits to Bluesky)
 install.ts            # Installer script (sets up git hooks)
-deno.json             # JSR package configuration
+validate.ts           # Credential validation script
+deno.json             # JSR package configuration & tasks
 deno.lock             # Deno lockfile for reproducible runs
 LICENSE               # MIT license
 .env                  # (git-ignored) Your local credentials
-.env.example          # Template for environment variables
+.env.example          # Enhanced template with inline documentation
+CLAUDE.md             # Project documentation for AI assistants
+README.md             # This file
+```
+
+### Available Tasks
+
+```bash
+deno task install     # Install git hook (same as setup)
+deno task setup       # Install git hook (alias for install)
+deno task validate    # Validate credentials and configuration
+deno task post        # Post latest commit to Bluesky
+deno task test        # Dry-run mode (preview without posting)
+deno task fmt         # Format code
+deno task lint        # Lint code
 ```
 
 ## Development
@@ -195,11 +358,11 @@ If you want to contribute or modify the bot:
 
 ```bash
 # Clone the repository
-git clone https://github.com/srdjan/deno-twitter-webhook-bot.git
-cd deno-bsky-bot
+git clone https://github.com/srdjan/bluesky-bot.git
+cd bluesky-bot
 
 # Install dependencies (automatic on first run)
-deno cache mod.ts install.ts
+deno cache mod.ts install.ts validate.ts
 
 # Format code
 deno task fmt
@@ -207,9 +370,32 @@ deno task fmt
 # Lint code
 deno task lint
 
-# Test locally
-BLUESKY_DRYRUN=on deno task post
+# Validate configuration
+deno task validate --test-auth
+
+# Test locally (dry-run)
+deno task test
+
+# Run the bot
+deno task post
 ```
+
+### Development Workflow
+
+1. Make changes to `mod.ts`, `install.ts`, or `validate.ts`
+2. Format: `deno task fmt`
+3. Lint: `deno task lint`
+4. Test with dry-run: `deno task test`
+5. Validate: `deno task validate --test-auth`
+6. Commit and push
+
+### Key Architecture
+
+- **Light FP pattern**: Pure functions, Result types, minimal side effects
+- **No external dependencies**: Custom dotenv parser, minimal npm imports
+- **GitHub API integration**: Fetches repository topics for hashtags
+- **Bluesky API**: Uses `@atproto/api` for posting
+- **Local state**: Deduplication via `.git/aug-bluesky-posted`
 
 ---
 
