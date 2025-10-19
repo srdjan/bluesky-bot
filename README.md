@@ -89,26 +89,35 @@ deno run -A jsr:@srdjan/bluesky-bot/install
 
 ## Upgrading
 
-If you already have the bot installed and want to upgrade to the latest version:
+If you already have the bot installed and want to upgrade to a newer version:
 
-### Option 1: Upgrade to Latest Version
+### Option 1: Upgrade to Specific Version
 
 ```bash
-# Upgrade to the latest version
-deno add --dev jsr:@srdjan/bluesky-bot@latest
-
-# Or specify a specific version
+# Upgrade to a specific version (recommended)
 deno add --dev jsr:@srdjan/bluesky-bot@1.3.0
+
+# Check available versions at https://jsr.io/@srdjan/bluesky-bot
 ```
 
-### Option 2: Check for Outdated Dependencies
+### Option 2: Remove and Reinstall
 
 ```bash
-# Check which dependencies have updates available
+# Remove the old version
+deno remove @srdjan/bluesky-bot
+
+# Add the latest version (omit version to get latest)
+deno add --dev jsr:@srdjan/bluesky-bot
+```
+
+### Option 3: Check for Updates First
+
+```bash
+# See what dependencies have updates available
 deno outdated
 
-# Then upgrade specific packages
-deno add --dev jsr:@srdjan/bluesky-bot@latest
+# Then upgrade to the specific version shown
+deno add --dev jsr:@srdjan/bluesky-bot@<version>
 ```
 
 ### After Upgrading
@@ -119,6 +128,8 @@ After upgrading, you may want to:
 3. Check for new configuration options in `.env.example`
 
 **Note:** The git hook automatically uses the latest installed version, so no need to reinstall hooks after upgrading.
+
+**⚠️ Known Issue:** Avoid using `@latest` tag with `deno add` as it may cause errors. Use specific version numbers or omit the version entirely.
 
 ---
 
