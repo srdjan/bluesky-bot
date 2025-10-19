@@ -9,10 +9,11 @@ app password flow.
 ## Key Features
 
 - 🎯 **Smart Hashtags**: Automatically uses GitHub repository topics as hashtags
+- 🖼️ **Rich Link Cards**: GitHub repos appear as beautiful preview cards in posts
 - 🤖 **AI Summarization**: Optional OpenAI integration for concise commit messages
 - ✅ **Credential Validation**: Test your setup before first use
 - 🔄 **Local Deduplication**: Prevents duplicate posts
-- 🌐 **GitHub Integration**: Automatically adds commit URLs
+- 🌐 **GitHub Integration**: Automatically adds commit URLs and metadata
 - 🧪 **Dry-Run Mode**: Preview posts without publishing
 
 ---
@@ -23,9 +24,11 @@ app password flow.
 2. Reads the latest commit metadata using `git` commands.
 3. Skips the post unless the commit message includes a semantic version **or** `@publish`.
 4. Dedupes locally by storing posted SHAs in `.git/aug-bluesky-posted`.
-5. **Fetches GitHub repository topics** and converts them to hashtags (e.g., `deno` → `#Deno`).
-6. Optionally condenses the commit title with OpenAI (disabled when no key is present).
-7. Logs in with `@atproto/api`'s `BskyAgent` and creates a Bluesky post with hashtags.
+5. **Fetches GitHub repository metadata** including topics, name, and description.
+6. Converts repository topics to hashtags (e.g., `deno` → `#Deno`).
+7. Optionally condenses the commit title with OpenAI (disabled when no key is present).
+8. **Creates a rich link card** for the GitHub repository with title, description, and URL.
+9. Logs in with `@atproto/api`'s `BskyAgent` and posts to Bluesky with hashtags and link card.
 
 If the script is run with `BLUESKY_DRYRUN=on`, it prints the post instead of publishing.
 
@@ -81,6 +84,41 @@ deno run -A jsr:@srdjan/bluesky-bot/install
 
 # The hook will call jsr:@srdjan/bluesky-bot automatically
 ```
+
+---
+
+## Upgrading
+
+If you already have the bot installed and want to upgrade to the latest version:
+
+### Option 1: Upgrade to Latest Version
+
+```bash
+# Upgrade to the latest version
+deno add --dev jsr:@srdjan/bluesky-bot@latest
+
+# Or specify a specific version
+deno add --dev jsr:@srdjan/bluesky-bot@1.3.0
+```
+
+### Option 2: Check for Outdated Dependencies
+
+```bash
+# Check which dependencies have updates available
+deno outdated
+
+# Then upgrade specific packages
+deno add --dev jsr:@srdjan/bluesky-bot@latest
+```
+
+### After Upgrading
+
+After upgrading, you may want to:
+1. Review the [changelog](https://github.com/srdjan/bluesky-bot/releases) for new features
+2. Test with dry-run: `BLUESKY_DRYRUN=on deno run -A jsr:@srdjan/bluesky-bot`
+3. Check for new configuration options in `.env.example`
+
+**Note:** The git hook automatically uses the latest installed version, so no need to reinstall hooks after upgrading.
 
 ---
 
