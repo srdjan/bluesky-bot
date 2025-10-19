@@ -90,10 +90,10 @@ After installation, validate your credentials and test the bot:
 
 ```bash
 # 1. Validate your configuration
-deno task validate --test-auth
+deno run -A jsr:@srdjan/bluesky-bot/validate --test-auth
 
 # 2. Preview what would be posted (dry-run)
-deno task test
+BLUESKY_DRYRUN=on deno run -A jsr:@srdjan/bluesky-bot
 
 # 3. Make a commit with a version or @publish keyword
 git commit -m "feat: new feature v1.0.0"
@@ -104,9 +104,9 @@ git push  # Automatically posts to Bluesky!
 
 - [ ] Install the bot: `deno run -A jsr:@srdjan/bluesky-bot/install`
 - [ ] Edit `.env` and add your Bluesky credentials
-- [ ] Validate credentials: `deno task validate --test-auth`
+- [ ] Validate credentials: `deno run -A jsr:@srdjan/bluesky-bot/validate --test-auth`
 - [ ] (Optional) Set GitHub repository topics for hashtags
-- [ ] Test with dry-run: `deno task test`
+- [ ] Test with dry-run: `BLUESKY_DRYRUN=on deno run -A jsr:@srdjan/bluesky-bot`
 - [ ] Push a commit with `v1.0.0` or `@publish`
 
 ---
@@ -250,10 +250,10 @@ Before using the bot, validate your setup:
 
 ```bash
 # Check configuration only
-deno task validate
+deno run -A jsr:@srdjan/bluesky-bot/validate
 
 # Test credentials against Bluesky API
-deno task validate --test-auth
+deno run -A jsr:@srdjan/bluesky-bot/validate --test-auth
 ```
 
 The validator checks:
@@ -290,7 +290,7 @@ The validator checks:
 
 **Missing credentials**
 
-- Run `deno task validate --test-auth` to identify missing variables
+- Run `deno run -A jsr:@srdjan/bluesky-bot/validate --test-auth` to identify missing variables
 - Check that `.env` file exists and has correct values
 - Get app password at: https://account.bsky.app/settings/app-passwords
 
@@ -340,7 +340,9 @@ CLAUDE.md             # Project documentation for AI assistants
 README.md             # This file
 ```
 
-### Available Tasks
+### Available Tasks (Development Only)
+
+**Note:** These tasks are only available when developing the bot itself. If you installed the bot as a dependency, use the `deno run -A jsr:@srdjan/bluesky-bot/...` commands shown above.
 
 ```bash
 deno task install     # Install git hook (same as setup)
