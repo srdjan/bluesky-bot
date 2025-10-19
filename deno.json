@@ -3,11 +3,14 @@
   "version": "1.1.2",
   "exports": {
     ".": "./mod.ts",
-    "./install": "./install.ts"
+    "./install": "./install.ts",
+    "./validate": "./validate.ts"
   },
   "license": "MIT",
   "tasks": {
     "install": "deno run -A install.ts",
+    "setup": "deno run -A install.ts",
+    "validate": "deno run -A validate.ts",
     "post": "deno run -A mod.ts",
     "test": "BLUESKY_DRYRUN=on deno run -A mod.ts",
     "fmt": "deno fmt",
