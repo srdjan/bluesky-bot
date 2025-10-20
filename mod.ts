@@ -50,6 +50,7 @@ const DEDUPE_FILE_PATH = ".git/aug-bluesky-posted" as const;
 const DEFAULT_BLUESKY_SERVICE = "https://bsky.social" as const;
 const OPENAI_MODEL = "gpt-4o-mini" as const;
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions" as const;
+const BLUESKY_MAX_POST_LENGTH = 300 as const;
 const SEMVER_REGEX =
   /\b(?:v|V)?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\b/;
 const PUBLISH_KEYWORD_REGEX = /\B@publish\b/i;
@@ -155,6 +156,12 @@ function stripCommitHashes(input: string): string {
   // remove likely git SHAs (7 to 40 hex chars)
   const noShas = input.replace(/\b[0-9a-f]{7,40}\b/gi, "");
   return noShas.replace(/\s{2,}/g, " ").trim();
+}
+
+function truncateToLimit(text: string, limit: number): string {
+  if (limit <= 0) return "";
+  if (text.length <= limit) return text;
+  return text.slice(0, limit).trimEnd();
 }
 
 const hasPublishKeyword = (msg: string): boolean => PUBLISH_KEYWORD_REGEX.test(msg);
@@ -493,7 +500,29 @@ async function composePost(commit: CommitInfo): Promise<string> {
   // URL will be in the embed card, so don't include it in the text
   // Compose final post: text + topics (URL in embed card)
   const parts = [condensed, topicHashtags].filter(Boolean);
-  return parts.join("\n").trim();
+  const basePost = parts.join("\n").trim();
+
+  const repoName = commit.repoData?.name?.trim();
+  if (!repoName) {
+    return truncateToLimit(basePost, BLUESKY_MAX_POST_LENGTH);
+  }
+
+  const initialPrefix = `${repoName}: `;
+
+  if (initialPrefix.length >= BLUESKY_MAX_POST_LENGTH) {
+    const truncatedRepo = truncateToLimit(repoName, BLUESKY_MAX_POST_LENGTH - 2);
+    const adjustedPrefix = truncatedRepo ? `${truncatedRepo}: ` : "";
+    return adjustedPrefix
+      ? truncateToLimit(adjustedPrefix, BLUESKY_MAX_POST_LENGTH)
+      : truncateToLimit(basePost, BLUESKY_MAX_POST_LENGTH);
+  }
+
+  const remaining = BLUESKY_MAX_POST_LENGTH - initialPrefix.length;
+  const truncatedBody = truncateToLimit(basePost, remaining);
+  const prefixWithoutTrailingSpace = initialPrefix.trimEnd();
+  return truncatedBody
+    ? `${initialPrefix}${truncatedBody}`
+    : prefixWithoutTrailingSpace;
 }
 
 async function publishPost(
